@@ -1,0 +1,12 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Qualquer usuário autenticado (mesmo anonimamente) pode ler/escrever
+    // o documento da própria "casa". Não é segurança de nível bancário —
+    // é suficiente pra manter o dado fora do alcance de gente aleatória na internet,
+    // já que é preciso saber o projeto Firebase (dados privados) e estar autenticado.
+    match /households/{householdId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Controle de Gastos</title>
+<meta name="theme-color" content="#2F6F5E">
+<meta name="description" content="Controle de gastos, caixinhas e caixas do casal, sincronizado entre dispositivos.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gastos">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+
+<style>
+  :root{
+    --bg: #F6F7F6;
+    --panel: #FFFFFF;
+    --ink: #1C2622;
+    --ink-soft: #5B6660;
+    --line: #E2E6E3;
+    --teal: #2F6F5E;
+    --teal-soft: #E6EFEC;
+    --amber: #B9772E;
+    --amber-soft: #F5EBDD;
+    --red: #B14A3C;
+    --red-soft: #F6E8E5;
+    --radius: 10px;
+  }
+  *{box-sizing:border-box;}
+  body, .app{
+    font-family: 'Inter', sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin:0;
+    padding:0;
+  }
+  .app{ max-width: 760px; margin: 0 auto; padding: 28px 18px 80px; }
+  h1,h2,h3{ font-family:'Source Serif 4', serif; font-weight:600; margin:0; }
+  h1{ font-size: 26px; letter-spacing:-0.01em; }
+  h2{ font-size: 17px; color: var(--ink); }
+  .eyebrow{ font-size:11px; text-transform:uppercase; letter-spacing:0.09em; color:var(--ink-soft); font-weight:600; }
+  .month-row{ margin-bottom:4px; display:flex; align-items:center; gap:2px; }
+  .month-input{ border:none; background:transparent; padding:2px 0; font-size:12px; font-weight:600; color:var(--teal); width:auto; text-transform:uppercase; letter-spacing:0.04em; }
+  .month-input:hover{ text-decoration:underline; cursor:pointer; }
+  .month-input:focus{ outline:none; }
+  .month-nav-btn{ border:none; background:transparent; padding:2px 4px; font-size:14px; color:var(--ink-soft); line-height:1; }
+  .month-nav-btn:hover{ color:var(--teal); }
+
+  .tabs{ display:flex; gap:6px; margin: 18px 0 22px; border-bottom:1px solid var(--line); }
+  .tab{ padding:9px 14px; font-size:14px; font-weight:600; color:var(--ink-soft); cursor:pointer; border-bottom:2px solid transparent; }
+  .tab.active{ color:var(--teal); border-bottom-color:var(--teal); }
+
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:16px; }
+  .panel-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+
+  .row{ display:flex; align-items:center; gap:10px; }
+  .row + .row{ margin-top:8px; }
+  .grow{ flex:1; }
+
+  input, select{
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    padding:8px 10px;
+    border:1px solid var(--line);
+    border-radius:7px;
+    background:#fff;
+    color:var(--ink);
+    width:100%;
+  }
+  input:focus, select:focus{ outline:2px solid var(--teal); outline-offset:1px; }
+  input[type=number]{ text-align:right; }
+
+  button{
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    font-weight:600;
+    padding:8px 12px;
+    border-radius:7px;
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--ink);
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  button:hover{ filter:brightness(0.98); }
+  button:focus-visible{ outline:2px solid var(--teal); outline-offset:1px; }
+
+  .btn-ghost{ border:1px dashed var(--line); color:var(--ink-soft); background:transparent; width:100%; margin-top:6px; }
+  .btn-primary{ background:var(--teal); border-color:var(--teal); color:#fff; }
+  .btn-danger-text{ border:none; background:none; color:var(--ink-soft); font-weight:500; padding:4px 6px; }
+  .btn-danger-text:hover{ color:var(--red); }
+
+  .pill{ font-size:11px; font-weight:700; padding:3px 8px; border-radius:100px; }
+  .pill-auto{ background:var(--teal-soft); color:var(--teal); }
+  .pill-manual{ background:#EFEFEF; color:var(--ink-soft); }
+
+  .status-btn{ min-width:104px; }
+  .status-pending{ background:var(--amber-soft); border-color:var(--amber-soft); color:var(--amber); }
+  .status-paid{ background:var(--teal-soft); border-color:var(--teal-soft); color:var(--teal); }
+
+  .expense-row{ padding:10px 0; border-bottom:1px solid var(--line); }
+  .expense-row:last-child{ border-bottom:none; }
+  .expense-name{ font-weight:600; font-size:14px; }
+  .expense-meta{ display:flex; gap:8px; align-items:center; margin-top:4px; }
+  .expense-value{ font-variant-numeric: tabular-nums; font-weight:600; min-width:88px; text-align:right; }
+  .order-input{ text-align:center; padding:8px 4px; font-weight:700; color:var(--ink-soft); flex-shrink:0; }
+
+  .income-card{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; }
+  .income-name-input{ font-weight:600; border:none; padding:2px 0; background:transparent; }
+  .income-name-input:focus{ outline:none; border-bottom:1px solid var(--teal); }
+
+  .summary{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; text-align:center; }
+  .summary .num{ font-family:'Source Serif 4',serif; font-size:20px; font-weight:600; }
+  .summary .lbl{ font-size:11px; color:var(--ink-soft); margin-top:2px; }
+  .summary .positive{ color:var(--teal); }
+  .summary .negative{ color:var(--red); }
+
+  .person-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:10px; }
+  .person-card{ border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .person-name{ font-family:'Source Serif 4',serif; font-weight:600; font-size:14px; margin-bottom:6px; }
+  .person-row{ display:flex; justify-content:space-between; font-size:12.5px; color:var(--ink-soft); padding:2px 0; font-variant-numeric:tabular-nums; }
+  .person-row.person-rest{ margin-top:4px; padding-top:6px; border-top:1px solid var(--line); font-weight:700; color:var(--ink); }
+  .person-paid{ color:var(--amber); font-weight:600; }
+  .person-row .positive{ color:var(--teal); }
+  .person-row .negative{ color:var(--red); }
+
+  .caixinha{ border:1px solid var(--line); border-radius:8px; padding:12px; margin-top:10px; }
+  .caixinha-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .caixinha-name-input{ font-weight:600; font-family:'Source Serif 4',serif; font-size:15px; border:none; background:transparent; padding:0; }
+  .caixinha-name-input:focus{ outline:none; border-bottom:1px solid var(--teal); }
+  .caixinha-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:10px; font-size:13px; }
+  .caixinha-field .lbl{ font-size:11px; color:var(--ink-soft); margin-bottom:3px; }
+  .caixinha-saidas{ margin-top:10px; }
+  .saida-line{ display:flex; gap:6px; font-size:13px; padding:3px 0; color:var(--ink-soft); align-items:center; }
+  .caixinha-saldo{ margin-top:10px; padding-top:10px; border-top:1px solid var(--line); display:flex; justify-content:space-between; align-items:baseline; }
+  .caixinha-saldo .num{ font-family:'Source Serif 4',serif; font-weight:600; font-size:18px; color:var(--teal); }
+
+  .caix-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .caix-table th{ text-align:right; font-size:10.5px; text-transform:uppercase; letter-spacing:0.04em; color:var(--ink-soft); font-weight:600; padding:4px 6px; border-bottom:1px solid var(--line); }
+  .caix-table th:first-child{ text-align:left; }
+  .caix-table td{ padding:3px 6px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .caix-table tr:last-child td{ border-bottom:1px solid var(--line); }
+  .caix-cell-input{ border:1px solid transparent; background:transparent; padding:4px 5px; width:100%; font-size:12.5px; border-radius:5px; }
+  .caix-cell-input:hover{ border-color:var(--line); }
+  .caix-cell-input:focus{ border-color:var(--teal); background:#fff; outline:none; }
+  .caix-num{ text-align:right; font-variant-numeric:tabular-nums; }
+  .td-entrada{ min-width:118px; }
+  .entrada-cell{ display:flex; align-items:center; gap:4px; }
+  .dep-toggle{ width:18px; height:18px; min-width:18px; border-radius:5px; border:1px solid var(--line); background:#fff; padding:0; font-size:11px; line-height:1; color:transparent; flex-shrink:0; }
+  .dep-toggle.on{ background:var(--teal); border-color:var(--teal); color:#fff; }
+  .caix-out-btn{ background:transparent; border:1px solid transparent; border-radius:5px; padding:4px 6px; font-size:12.5px; font-variant-numeric:tabular-nums; color:var(--amber); width:100%; text-align:right; }
+  .caix-out-btn:hover{ border-color:var(--line); }
+  .td-final{ text-align:right; font-weight:700; color:var(--teal); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .tr-expand td{ background:var(--bg); border-bottom:1px solid var(--line); }
+
+  .conta-group-row td{ padding:0; border-bottom:none; }
+  .conta-header{ display:flex; align-items:center; gap:8px; background:var(--teal-soft); padding:7px 8px; margin-top:8px; border-radius:6px 6px 0 0; }
+  .conta-header-casa{ background:var(--amber-soft); }
+  .conta-type-btn{ border:none; background:transparent; padding:0 2px; font-size:14px; line-height:1; }
+  .conta-header-input{ font-family:'Source Serif 4',serif; font-weight:600; font-size:13.5px; background:transparent; border:none; color:var(--teal); padding:2px 4px; flex:1; min-width:0; }
+  .conta-header-casa .conta-header-input{ color:var(--amber); }
+  .conta-header-input:focus{ outline:none; border-bottom:1px solid currentColor; }
+  .conta-header-static{ font-family:'Source Serif 4',serif; font-weight:600; font-size:13.5px; color:var(--ink-soft); flex:1; padding:2px 4px; }
+  .conta-header-total{ font-size:12.5px; font-weight:700; color:var(--teal); font-variant-numeric:tabular-nums; }
+  .conta-header-casa .conta-header-total{ color:var(--amber); }
+  .caix-conta-select{ display:block; width:100%; border:none; background:transparent; font-size:10.5px; color:var(--ink-soft); padding:0 5px; margin-top:-2px; }
+  .caix-conta-select:focus{ outline:none; }
+  .caix-payer-select{ display:block; width:100%; border:none; background:transparent; font-size:10.5px; color:var(--ink-soft); padding:0 5px; margin-top:2px; }
+  .caix-payer-select:focus{ outline:none; }
+
+  .empty{ color:var(--ink-soft); font-size:13px; text-align:center; padding:14px 0; }
+  .footer-actions{ text-align:center; margin-top:24px; }
+  .footer-actions button{ background:transparent; border:none; color:var(--ink-soft); font-size:12px; text-decoration:underline; }
+
+  .bar-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .bar-label{ width:64px; font-size:12px; color:var(--ink-soft); flex-shrink:0; }
+  .bar-track{ flex:1; background:#EEF0EE; border-radius:5px; height:14px; overflow:hidden; display:flex; }
+  .bar-fill-income{ background:var(--teal); height:100%; }
+  .bar-fill-expense{ background:var(--amber); height:100%; }
+  .bar-value{ width:80px; font-size:12px; text-align:right; font-variant-numeric:tabular-nums; }
+  .legend{ display:flex; gap:14px; font-size:12px; color:var(--ink-soft); margin-bottom:14px; }
+  .legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .hist-month{ display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line); font-size:13px; }
+  .hist-month:last-child{ border-bottom:none; }
+
+  .loading{ text-align:center; padding:60px 0; color:var(--ink-soft); font-size:14px; }
+
+  .setup-screen{ padding-top:10px; }
+  .setup-lead{ font-size:13.5px; color:var(--ink-soft); line-height:1.5; margin:10px 0 18px; }
+  .setup-error{ background:var(--red-soft); color:var(--red); font-size:12.5px; padding:9px 11px; border-radius:7px; margin-bottom:14px; }
+  .setup-label{ display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin:14px 0 6px; }
+  .setup-textarea{ width:100%; min-height:110px; font-family:monospace; font-size:12px; border:1px solid var(--line); border-radius:7px; padding:10px; resize:vertical; background:#fff; }
+  .setup-input{ width:100%; }
+  .setup-btn{ width:100%; margin-top:18px; padding:11px; font-size:14px; }
+  .setup-hint{ font-size:11.5px; color:var(--ink-soft); margin-top:14px; text-align:center; }
+</style>
+</head>
+<body>
+
+<div id="root" class="app"><div class="loading">Carregando…</div></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+
+(function(){
+  const root = document.getElementById('root');
+  const DEFAULT_TEXTS = ['Nova despesa', 'Nova caixinha', 'Nova poupança', 'Nova pessoa'];
+  document.addEventListener('focusin', function(ev){
+    const t = ev.target;
+    if(t && t.tagName==='INPUT' && t.type==='number'){
+      if(t.value==='0' || t.value==='0.00' || t.value==='0.0'){
+        t.value = '';
+      }
+      if(typeof t.select==='function') t.select();
+    }
+    if(t && t.tagName==='INPUT' && (t.type==='text' || t.type==='') && DEFAULT_TEXTS.includes(t.value)){
+      if(typeof t.select==='function') t.select();
+    }
+  });
+  const fmt = v => (Number(v)||0).toLocaleString('de-CH',{style:'currency',currency:'CHF'});
+  const uid = () => Math.random().toString(36).slice(2,9);
+  const monthKey = d => d.toISOString().slice(0,7);
+  const monthLabel = key => {
+    const [y,m] = key.split('-');
+    const meses=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    return meses[parseInt(m,10)-1] + '/' + y.slice(2);
+  };
+
+  function defaultState(){
+    const now = new Date();
+    const marcelo = uid();
+    const gabriela = uid();
+
+    const expenseNames = [
+      ['Alimentação', 800],
+      ['Gato', 50],
+      ['Mesada Gabriela', 140],
+      ['Academia', 70],
+      ['Igreja', 200],
+      ['Mensalidade VPN', 12],
+      ['Seguro saúde Marcelo', 400],
+      ['Seguro saúde Gabriela', 400],
+      ['Assinatura IA', 85],
+      ['Gasolina', 200],
+      ['Aluguel', 550],
+      ['Lanche', 100],
+      ['Mãe da Gabriela', 200]
+    ];
+
+    const caixinhaDefs = [
+      ['Férias / Viagem', 300, 'ferias'],
+      ['Investimento', 350, 'investimento'],
+      ['Contas do fim do ano', 170, 'pagamento'],
+      ['Manutenção do carro', 150, 'pagamento'],
+      ['Carro novo', 200, 'pagamento'],
+      ['Reserva 5ª semana', 70, 'casa']
+    ];
+    const contaIds = { ferias: uid(), investimento: uid(), pagamento: uid(), casa: uid() };
+
+    return {
+      currentMonth: monthKey(now),
+      people: [
+        { id: marcelo, name: 'Marcelo' },
+        { id: gabriela, name: 'Gabriela' }
+      ],
+      monthlyIncomes: {}, // month -> { personId: value }
+      expenses: expenseNames.map(([name, value], idx) => ({
+        id: uid(), name, value, auto: false,
+        defaultPayerId: marcelo, order: idx+1
+      })),
+      monthlyExpenseStatus: {}, // month -> { expenseId: {paid, payerId} }
+      contas: [
+        { id: contaIds.ferias, name: 'Poupança férias', type: 'banco' },
+        { id: contaIds.investimento, name: 'Poupança investimento', type: 'banco' },
+        { id: contaIds.pagamento, name: 'Poupança pagamento', type: 'banco' },
+        { id: contaIds.casa, name: 'Guardado em casa', type: 'casa' }
+      ],
+      caixinhas: caixinhaDefs.map(([name, monthlyValue, contaKey]) => ({
+        id: uid(), name, monthlyValue, saldoAnterior: 0,
+        contaId: contaIds[contaKey] || null, defaultPayerId: marcelo
+      })),
+      monthlyCaixinhaStatus: {}, // month -> { caixinhaId: {deposited, saidas} }
+      history: [] // { month, totalIncome, totalExpensePaid, totalDeposited, saldo }
+    };
+  }
+
+  let state = null;
+  let tab = 'home';
+  const expandedCaixinhas = new Set();
+
+  // ---------- Firebase / sincronização ----------
+  const clientId = Math.random().toString(36).slice(2) + Date.now();
+  let db = null, householdRef = null, firebaseReady = false;
+
+  function migrateState(){
+    if(!state.people || state.people.length===0){
+      state.people = [{id:uid(),name:'Pessoa 1'},{id:uid(),name:'Pessoa 2'}];
+    }
+    if(!state.contas) state.contas = [];
+    if(state.expenses && state.expenses.some(e=> e.order===undefined)){
+      state.expenses.forEach((e,idx)=>{ if(e.order===undefined) e.order = idx+1; });
+    }
+    if(state.caixinhas && state.caixinhas.some(c=> c.defaultPayerId===undefined)){
+      state.caixinhas.forEach(c=>{ if(c.defaultPayerId===undefined) c.defaultPayerId = state.people[0]?.id || null; });
+    }
+    if(!state.monthlyIncomes){
+      state.monthlyIncomes = {};
+      state.monthlyIncomes[state.currentMonth] = state.incomes || {};
+    }
+    if(!state.monthlyExpenseStatus){
+      state.monthlyExpenseStatus = {};
+      const bucket = {};
+      (state.expenses||[]).forEach(e=>{
+        bucket[e.id] = { paid: !!e.paid, payerId: e.payerId || e.defaultPayerId || null };
+      });
+      state.monthlyExpenseStatus[state.currentMonth] = bucket;
+    }
+    if(!state.monthlyCaixinhaStatus){
+      state.monthlyCaixinhaStatus = {};
+      const bucket = {};
+      (state.caixinhas||[]).forEach(c=>{
+        bucket[c.id] = { deposited: !!c.deposited, saidas: c.saidas || [], payerId: c.defaultPayerId || null };
+      });
+      state.monthlyCaixinhaStatus[state.currentMonth] = bucket;
+    }
+    Object.values(state.monthlyCaixinhaStatus).forEach(bucket=>{
+      Object.keys(bucket).forEach(cid=>{
+        if(bucket[cid].payerId===undefined){
+          const c = state.caixinhas.find(x=>x.id===cid);
+          bucket[cid].payerId = c ? c.defaultPayerId : null;
+        }
+      });
+    });
+  }
+
+  function showSetupScreen(prefillError){
+    let savedCfg = '';
+    try{ savedCfg = localStorage.getItem('gastos_fb_config') || ''; }catch(e){}
+    let savedHousehold = '';
+    try{ savedHousehold = localStorage.getItem('gastos_household_id') || ''; }catch(e){}
+    root.innerHTML = `
+      <div class="setup-screen">
+        <h1>Controle de gastos</h1>
+        <p class="setup-lead">Configure a sincronização uma vez em cada aparelho. Os dados ficam salvos no seu projeto Firebase e sincronizam entre todos os dispositivos que usarem o mesmo código.</p>
+        ${prefillError ? `<div class="setup-error">${prefillError}</div>` : ''}
+        <label class="setup-label">Configuração do Firebase (cole o objeto firebaseConfig)</label>
+        <textarea id="setupCfg" class="setup-textarea" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...", ...}'>${savedCfg}</textarea>
+        <label class="setup-label">Código da casa (combine o mesmo código nos dois aparelhos)</label>
+        <input id="setupHousehold" class="setup-input" type="text" placeholder="ex: marcelo-gabriela-2026" value="${savedHousehold}">
+        <button id="setupSave" class="btn-primary setup-btn">Salvar e conectar</button>
+        <p class="setup-hint">Veja o passo a passo completo no README.md do projeto para criar o projeto Firebase gratuito.</p>
+      </div>`;
+    document.getElementById('setupSave').onclick = async ()=>{
+      const cfgText = document.getElementById('setupCfg').value.trim();
+      const household = document.getElementById('setupHousehold').value.trim();
+      if(!household){ showSetupScreen('Digite um código pra identificar a casa.'); return; }
+      let cfg;
+      try{ cfg = JSON.parse(cfgText); }
+      catch(e){ showSetupScreen('A configuração do Firebase não é um JSON válido. Copie exatamente o objeto firebaseConfig do console do Firebase.'); return; }
+      try{
+        localStorage.setItem('gastos_fb_config', JSON.stringify(cfg));
+        localStorage.setItem('gastos_household_id', household);
+      }catch(e){}
+      initFirebase(cfg, household);
+    };
+  }
+
+  async function initFirebase(cfg, householdId){
+    root.innerHTML = '<div class="loading">Conectando…</div>';
+    try{
+      const app = initializeApp(cfg);
+      const auth = getAuth(app);
+      await signInAnonymously(auth);
+      db = getFirestore(app);
+      householdRef = doc(db, 'households', householdId);
+
+      const snap = await getDoc(householdRef);
+      if(snap.exists() && snap.data().json){
+        state = JSON.parse(snap.data().json);
+      } else {
+        state = defaultState();
+        await setDoc(householdRef, { json: JSON.stringify(state), origin: clientId, updatedAt: Date.now() });
+      }
+      migrateState();
+      firebaseReady = true;
+      render();
+
+      onSnapshot(householdRef, (snap2)=>{
+        if(!snap2.exists()) return;
+        const data = snap2.data();
+        if(data.origin === clientId) return; // eco da nossa própria escrita, ignora
+        try{
+          state = JSON.parse(data.json);
+          migrateState();
+          render();
+        }catch(e){ console.error('Erro ao aplicar dado remoto', e); }
+      }, (err)=>{
+        console.error('Erro de sincronização', err);
+      });
+    }catch(err){
+      console.error(err);
+      try{ localStorage.removeItem('gastos_fb_config'); }catch(e){}
+      showSetupScreen('Não consegui conectar com essas configurações (' + (err.message||err) + '). Confira o objeto do Firebase e tente de novo.');
+    }
+  }
+
+  async function loadState(){
+    let cfg = null, household = null;
+    try{
+      cfg = JSON.parse(localStorage.getItem('gastos_fb_config') || 'null');
+      household = localStorage.getItem('gastos_household_id');
+    }catch(e){}
+    if(!cfg || !household){
+      showSetupScreen();
+      return;
+    }
+    initFirebase(cfg, household);
+  }
+
+  async function saveState(){
+    if(!firebaseReady || !householdRef) return;
+    try{
+      await setDoc(householdRef, { json: JSON.stringify(state), origin: clientId, updatedAt: Date.now() });
+    }catch(e){
+      console.error('Erro ao salvar no Firebase', e);
+    }
+  }
+
+  function update(fn){
+    fn(state);
+    saveState();
+    render();
+  }
+  function updateSilent(fn){
+    fn(state);
+    saveState();
+  }
+
+  // ---------- mês / status helpers ----------
+  function nextMonthKey(m){
+    const [y, mm] = m.split('-').map(Number);
+    const d = new Date(y, mm-1+1, 1);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  }
+  function prevMonthKey(m){
+    const [y, mm] = m.split('-').map(Number);
+    const d = new Date(y, mm-1-1, 1);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  }
+  function isAutoDue(e, monthStr){
+    if(!e.autoDay) return false; // sem dia definido, não pode ser considerada paga automaticamente
+    const [y, m] = monthStr.split('-').map(Number);
+    const dueDate = new Date(y, m-1, Number(e.autoDay));
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    dueDate.setHours(0,0,0,0);
+    return today >= dueDate;
+  }
+  function isExpensePaid(e, st, monthStr){
+    if(e.auto && e.autoDay) return isAutoDue(e, monthStr);
+    return !!st.paid;
+  }
+  function ensureIncomes(m){
+    if(!state.monthlyIncomes) state.monthlyIncomes = {};
+    if(!state.monthlyIncomes[m]) state.monthlyIncomes[m] = {};
+    return state.monthlyIncomes[m];
+  }
+  function ensureExpenseStatusBucket(m){
+    if(!state.monthlyExpenseStatus) state.monthlyExpenseStatus = {};
+    if(!state.monthlyExpenseStatus[m]) state.monthlyExpenseStatus[m] = {};
+    return state.monthlyExpenseStatus[m];
+  }
+  function getExpenseStatus(id){
+    const bucket = ensureExpenseStatusBucket(state.currentMonth);
+    if(!bucket[id]){
+      const e = state.expenses.find(x=>x.id===id);
+      bucket[id] = { paid: false, payerId: e ? e.defaultPayerId : null };
+    }
+    return bucket[id];
+  }
+  function ensureCaixinhaStatusBucket(m){
+    if(!state.monthlyCaixinhaStatus) state.monthlyCaixinhaStatus = {};
+    if(!state.monthlyCaixinhaStatus[m]) state.monthlyCaixinhaStatus[m] = {};
+    return state.monthlyCaixinhaStatus[m];
+  }
+  function getCaixinhaStatus(id){
+    const bucket = ensureCaixinhaStatusBucket(state.currentMonth);
+    if(!bucket[id]){
+      const c = state.caixinhas.find(x=>x.id===id);
+      bucket[id] = { deposited: false, saidas: [], payerId: c ? c.defaultPayerId : null };
+    }
+    return bucket[id];
+  }
+
+  // ---------- computations (sempre referentes ao mês visualizado) ----------
+  function totalIncome(){
+    const inc = ensureIncomes(state.currentMonth);
+    return state.people.reduce((s,p)=> s + (Number(inc[p.id])||0), 0);
+  }
+  function totalExpensePaid(){
+    return state.expenses.reduce((s,e)=>{
+      const st = getExpenseStatus(e.id);
+      const paid = isExpensePaid(e, st, state.currentMonth);
+      return s + (paid ? (Number(e.value)||0) : 0);
+    }, 0);
+  }
+  function totalExpensePending(){
+    return state.expenses.reduce((s,e)=>{
+      const st = getExpenseStatus(e.id);
+      const paid = isExpensePaid(e, st, state.currentMonth);
+      return s + (!paid ? (Number(e.value)||0) : 0);
+    }, 0);
+  }
+  function totalDeposited(){
+    return state.caixinhas.reduce((s,c)=>{
+      const st = getCaixinhaStatus(c.id);
+      return s + (st.deposited ? (Number(c.monthlyValue)||0) : 0);
+    }, 0);
+  }
+  function caixinhaSaidasTotal(c){
+    const st = getCaixinhaStatus(c.id);
+    return (st.saidas||[]).reduce((s,x)=> s + (Number(x.value)||0), 0);
+  }
+  function caixinhaSaldo(c){
+    const st = getCaixinhaStatus(c.id);
+    const entrada = st.deposited ? (Number(c.monthlyValue)||0) : 0;
+    return (Number(c.saldoAnterior)||0) + entrada - caixinhaSaidasTotal(c);
+  }
+  function contaTotal(contaId){
+    return state.caixinhas.filter(c=>c.contaId===contaId).reduce((s,c)=> s + caixinhaSaldo(c), 0);
+  }
+  function saldoFinal(){
+    return totalIncome() - totalExpensePaid() - totalDeposited();
+  }
+  function personIncome(personId){
+    const inc = ensureIncomes(state.currentMonth);
+    return Number(inc[personId]) || 0;
+  }
+  function personAssignedTotal(personId){
+    const fromExpenses = state.expenses.reduce((s,e)=>{
+      const st = getExpenseStatus(e.id);
+      if(st.payerId===personId) return s + (Number(e.value)||0);
+      return s;
+    }, 0);
+    const fromCaixinhas = state.caixinhas.reduce((s,c)=>{
+      const st = getCaixinhaStatus(c.id);
+      if(st.payerId===personId) return s + (Number(c.monthlyValue)||0);
+      return s;
+    }, 0);
+    return fromExpenses + fromCaixinhas;
+  }
+  function personPaid(personId){
+    const fromExpenses = state.expenses.reduce((s,e)=>{
+      const st = getExpenseStatus(e.id);
+      const paid = isExpensePaid(e, st, state.currentMonth);
+      if(paid && st.payerId===personId) return s + (Number(e.value)||0);
+      return s;
+    }, 0);
+    const fromCaixinhas = state.caixinhas.reduce((s,c)=>{
+      const st = getCaixinhaStatus(c.id);
+      if(st.deposited && st.payerId===personId) return s + (Number(c.monthlyValue)||0);
+      return s;
+    }, 0);
+    return fromExpenses + fromCaixinhas;
+  }
+
+  // ---------- actions ----------
+  function addPerson(){
+    update(s=> s.people.push({id:uid(), name:'Nova pessoa'}));
+  }
+  function removePerson(id){
+    update(s=>{
+      s.people = s.people.filter(p=>p.id!==id);
+      Object.values(s.monthlyIncomes||{}).forEach(bucket=> delete bucket[id]);
+      s.expenses.forEach(e=>{ if(e.defaultPayerId===id) e.defaultPayerId=null; });
+      Object.values(s.monthlyExpenseStatus||{}).forEach(bucket=>{
+        Object.values(bucket).forEach(st=>{ if(st.payerId===id) st.payerId=null; });
+      });
+      s.caixinhas.forEach(c=>{ if(c.defaultPayerId===id) c.defaultPayerId=null; });
+      Object.values(s.monthlyCaixinhaStatus||{}).forEach(bucket=>{
+        Object.values(bucket).forEach(st=>{ if(st.payerId===id) st.payerId=null; });
+      });
+    });
+  }
+  function reorderExpense(id, desiredOrder){
+    const list = state.expenses.slice().sort((a,b)=> (a.order||9999) - (b.order||9999));
+    const item = list.find(x=>x.id===id);
+    if(!item) return;
+    list.splice(list.indexOf(item), 1);
+    const insertAt = Math.min(Math.max(desiredOrder-1, 0), list.length);
+    list.splice(insertAt, 0, item);
+    list.forEach((x, idx)=>{ x.order = idx+1; });
+  }
+  function addExpense(){
+    update(s=> s.expenses.push({
+      id: uid(), name:'Nova despesa', value:0, auto:false,
+      defaultPayerId: s.people[0]?.id || null,
+      order: (Math.max(0, ...s.expenses.map(e=>e.order||0)) + 1)
+    }));
+  }
+  function removeExpense(id){
+    update(s=> s.expenses = s.expenses.filter(e=>e.id!==id));
+  }
+  function toggleAuto(id){
+    update(s=>{
+      const e = s.expenses.find(x=>x.id===id);
+      e.auto = !e.auto;
+    });
+  }
+  function togglePaid(id){
+    update(s=>{
+      const e = s.expenses.find(x=>x.id===id);
+      if(e.auto && e.autoDay) return;
+      const st = getExpenseStatus(id);
+      st.paid = !st.paid;
+    });
+  }
+  function addCaixinha(){
+    update(s=> s.caixinhas.push({ id:uid(), name:'Nova caixinha', monthlyValue:0, saldoAnterior:0, contaId:null, defaultPayerId: s.people[0]?.id || null }));
+  }
+  function removeCaixinha(id){
+    update(s=> s.caixinhas = s.caixinhas.filter(c=>c.id!==id));
+  }
+  function addConta(){
+    update(s=>{
+      if(!s.contas) s.contas=[];
+      s.contas.push({id:uid(), name:'Nova poupança', type:'banco'});
+    });
+  }
+  function toggleContaType(id){
+    update(s=>{
+      const ct = s.contas.find(x=>x.id===id);
+      ct.type = ct.type==='casa' ? 'banco' : 'casa';
+    });
+  }
+  function removeConta(id){
+    update(s=>{
+      s.contas = s.contas.filter(c=>c.id!==id);
+      s.caixinhas.forEach(c=>{ if(c.contaId===id) c.contaId=null; });
+    });
+  }
+  function toggleDeposit(id){
+    update(s=>{
+      const st = getCaixinhaStatus(id);
+      st.deposited = !st.deposited;
+    });
+  }
+  function addSaida(cid){
+    update(s=>{
+      const st = getCaixinhaStatus(cid);
+      st.saidas.push({id:uid(), desc:'Saída', value:0});
+    });
+  }
+  function removeSaida(cid, sid){
+    update(s=>{
+      const st = getCaixinhaStatus(cid);
+      st.saidas = st.saidas.filter(x=>x.id!==sid);
+    });
+  }
+
+  function closeMonth(){
+    if(!confirm(`Fechar ${monthLabel(state.currentMonth)}? As caixinhas vão herdar o saldo final como saldo anterior a partir do mês seguinte.`)) return;
+    update(s=>{
+      s.history.push({
+        month: s.currentMonth,
+        totalIncome: totalIncome(),
+        totalExpensePaid: totalExpensePaid(),
+        totalDeposited: totalDeposited(),
+        saldo: saldoFinal()
+      });
+      s.caixinhas.forEach(c=>{
+        c.saldoAnterior = caixinhaSaldo(c);
+      });
+      s.currentMonth = nextMonthKey(s.currentMonth);
+    });
+  }
+
+  // ---------- render ----------
+  function render(){
+    root.innerHTML = '';
+    root.appendChild(renderHeader());
+    if(tab==='home') root.appendChild(renderHome());
+    else root.appendChild(renderHistory());
+  }
+
+  function el(tagName, cls, html){
+    const e = document.createElement(tagName);
+    if(cls) e.className = cls;
+    if(html!==undefined) e.innerHTML = html;
+    return e;
+  }
+
+  function renderHeader(){
+    const wrap = el('div');
+    const h = el('div');
+    h.innerHTML = `<h1>Controle de gastos</h1>`;
+    const monthRow = el('div','month-row');
+    const prevBtn = el('button','month-nav-btn','‹');
+    prevBtn.onclick = ()=> update(s=>{ s.currentMonth = prevMonthKey(s.currentMonth); });
+    const monthInput = el('input','month-input');
+    monthInput.type = 'month';
+    monthInput.value = state.currentMonth;
+    monthInput.onchange = ev=> update(s=>{ s.currentMonth = ev.target.value; });
+    const nextBtn = el('button','month-nav-btn','›');
+    nextBtn.onclick = ()=> update(s=>{ s.currentMonth = nextMonthKey(s.currentMonth); });
+    monthRow.appendChild(prevBtn); monthRow.appendChild(monthInput); monthRow.appendChild(nextBtn);
+    h.insertBefore(monthRow, h.firstChild);
+    wrap.appendChild(h);
+    const tabs = el('div','tabs');
+    const t1 = el('div','tab'+(tab==='home'?' active':''),'Início');
+    const t2 = el('div','tab'+(tab==='history'?' active':''),'Histórico');
+    t1.onclick = ()=>{ tab='home'; render(); };
+    t2.onclick = ()=>{ tab='history'; render(); };
+    tabs.appendChild(t1); tabs.appendChild(t2);
+    wrap.appendChild(tabs);
+    return wrap;
+  }
+
+  function renderHome(){
+    const wrap = el('div');
+
+    // Summary
+    const summary = el('div','panel');
+    const si = totalIncome(), sep = totalExpensePaid(), sf = saldoFinal();
+    summary.innerHTML = `
+      <div class="summary">
+        <div><div class="num">${fmt(si)}</div><div class="lbl">Entradas</div></div>
+        <div><div class="num">${fmt(sep)}</div><div class="lbl">Gasto (pago)</div></div>
+        <div><div class="num ${sf>=0?'positive':'negative'}">${fmt(sf)}</div><div class="lbl">Saldo disponível</div></div>
+      </div>`;
+    wrap.appendChild(summary);
+
+    // Por pessoa
+    if(state.people.length>0){
+      const perPanel = el('div','panel');
+      const headP = el('div','panel-head');
+      headP.innerHTML = '<h2>Por pessoa</h2>';
+      perPanel.appendChild(headP);
+      const perGrid = el('div','person-grid');
+      state.people.forEach(p=>{
+        const income = personIncome(p.id);
+        const paid = personPaid(p.id);
+        const rest = income - paid;
+        const card = el('div','person-card');
+        card.innerHTML = `
+          <div class="person-name">${p.name}</div>
+          <div class="person-row"><span>Entrada</span><span>${fmt(income)}</span></div>
+          <div class="person-row"><span>Já pago</span><span class="person-paid">${fmt(paid)}</span></div>
+          <div class="person-row person-rest"><span>Restante</span><span class="${rest>=0?'positive':'negative'}">${fmt(rest)}</span></div>
+        `;
+        perGrid.appendChild(card);
+      });
+      perPanel.appendChild(perGrid);
+      wrap.appendChild(perPanel);
+    }
+
+    // Incomes
+    const incomesPanel = el('div','panel');
+    const headI = el('div','panel-head');
+    headI.innerHTML = '<h2>Entradas</h2>';
+    incomesPanel.appendChild(headI);
+    state.people.forEach(p=>{
+      const inc = ensureIncomes(state.currentMonth);
+      const row = el('div','income-card');
+      const nameInput = el('input');
+      nameInput.className='income-name-input';
+      nameInput.value = p.name;
+      nameInput.style.maxWidth='140px';
+      nameInput.oninput = e=> updateSilent(s=>{ s.people.find(x=>x.id===p.id).name = e.target.value; });
+      const valWrap = el('div','row');
+      const valInput = el('input');
+      valInput.type='number'; valInput.step='0.01';
+      valInput.style.width='120px';
+      valInput.value = inc[p.id] ?? '';
+      valInput.placeholder='0,00';
+      valInput.oninput = e=> updateSilent(()=>{ ensureIncomes(state.currentMonth)[p.id] = e.target.value; });
+      valInput.onblur = ()=> render();
+      const rm = el('button','btn-danger-text','✕');
+      rm.title='Remover pessoa';
+      rm.onclick = ()=> removePerson(p.id);
+      valWrap.appendChild(valInput); valWrap.appendChild(rm);
+      row.appendChild(nameInput); row.appendChild(valWrap);
+      incomesPanel.appendChild(row);
+    });
+    const addP = el('button','btn-ghost','+ adicionar pessoa');
+    addP.onclick = addPerson;
+    incomesPanel.appendChild(addP);
+    wrap.appendChild(incomesPanel);
+
+    // Expenses
+    const expPanel = el('div','panel');
+    const headE = el('div','panel-head');
+    headE.innerHTML = `<h2>Despesas</h2><span class="eyebrow">${fmt(totalExpensePending())} pendente</span>`;
+    expPanel.appendChild(headE);
+    if(state.expenses.length===0){
+      expPanel.appendChild(el('div','empty','Nenhuma despesa ainda. Adicione a primeira abaixo.'));
+    }
+    const sortedExpenses = state.expenses.slice().sort((a,b)=> (a.order||9999) - (b.order||9999));
+    sortedExpenses.forEach(e=>{
+      const st = getExpenseStatus(e.id);
+      const row = el('div','expense-row');
+      const top = el('div','row');
+      const orderInput = el('input','order-input');
+      orderInput.type='number'; orderInput.min='1'; orderInput.style.width='40px';
+      orderInput.value = e.order || '';
+      orderInput.title='Prioridade — o menor número fica no topo';
+      orderInput.oninput = ev=> updateSilent(s=>{ s.expenses.find(x=>x.id===e.id).order = Number(ev.target.value)||0; });
+      orderInput.onblur = ev=> update(()=> reorderExpense(e.id, Number(ev.target.value)||1));
+      const nameInput = el('input');
+      nameInput.value = e.name; nameInput.className='grow';
+      nameInput.oninput = ev=> updateSilent(s=>{ s.expenses.find(x=>x.id===e.id).name = ev.target.value; });
+      const valInput = el('input');
+      valInput.type='number'; valInput.step='0.01'; valInput.style.width='100px';
+      valInput.value = e.value;
+      valInput.oninput = ev=> updateSilent(s=>{ s.expenses.find(x=>x.id===e.id).value = ev.target.value; });
+      valInput.onblur = ()=> render();
+      const rm = el('button','btn-danger-text','✕');
+      rm.onclick = ()=> removeExpense(e.id);
+      top.appendChild(orderInput); top.appendChild(nameInput); top.appendChild(valInput); top.appendChild(rm);
+      row.appendChild(top);
+
+      const meta = el('div','expense-meta');
+      const autoBtn = el('button','pill '+(e.auto?'pill-auto':'pill-manual'), e.auto?'Automático':'Manual');
+      autoBtn.onclick = ()=> toggleAuto(e.id);
+      meta.appendChild(autoBtn);
+
+      if(e.auto){
+        const dayWrap = el('label');
+        dayWrap.style.fontSize='11px'; dayWrap.style.color='var(--ink-soft)'; dayWrap.style.display='flex'; dayWrap.style.alignItems='center'; dayWrap.style.gap='4px';
+        dayWrap.appendChild(document.createTextNode('dia'));
+        const dayInput = el('input');
+        dayInput.type='number'; dayInput.min='1'; dayInput.max='31';
+        dayInput.style.width='52px';
+        dayInput.value = e.autoDay || '';
+        dayInput.placeholder='—';
+        dayInput.oninput = ev=> updateSilent(s=>{ s.expenses.find(x=>x.id===e.id).autoDay = ev.target.value; });
+        dayWrap.appendChild(dayInput);
+        meta.appendChild(dayWrap);
+      }
+
+      const paySelect = el('select');
+      paySelect.style.width='auto';
+      state.people.forEach(p=>{
+        const opt = el('option'); opt.value=p.id; opt.textContent = p.name;
+        if(st.payerId===p.id) opt.selected = true;
+        paySelect.appendChild(opt);
+      });
+      paySelect.onchange = ev=> update(()=>{ getExpenseStatus(e.id).payerId = ev.target.value; });
+      meta.appendChild(paySelect);
+
+      const defWrap = el('label');
+      defWrap.style.fontSize='13px'; defWrap.style.color='var(--ink-soft)'; defWrap.style.display='flex'; defWrap.style.alignItems='center'; defWrap.style.gap='2px'; defWrap.style.cursor='pointer';
+      defWrap.title='Definir pagador atual como padrão para meses futuros';
+      const defCheck = el('input'); defCheck.type='checkbox'; defCheck.style.width='auto';
+      defCheck.checked = e.defaultPayerId === st.payerId;
+      defCheck.onchange = ()=> update(s=>{ const ex=s.expenses.find(x=>x.id===e.id); ex.defaultPayerId = getExpenseStatus(e.id).payerId; });
+      defWrap.appendChild(defCheck);
+      defWrap.appendChild(document.createTextNode('📌'));
+      meta.appendChild(defWrap);
+
+      const hasAutoDay = e.auto && e.autoDay;
+      const paidNow = isExpensePaid(e, st, state.currentMonth);
+      const statusBtn = el('button','status-btn '+(paidNow?'status-paid':'status-pending'), paidNow?'✓ Pago':(hasAutoDay?'Aguardando débito':'Marcar pago'));
+      statusBtn.style.marginLeft='auto';
+      if(hasAutoDay){ statusBtn.disabled = true; statusBtn.title = paidNow ? 'Automático — já debitado' : 'Automático — ainda não chegou o dia do débito'; }
+      else if(e.auto){ statusBtn.title = 'Automático sem dia definido — confirme manualmente quando for debitado'; }
+      statusBtn.onclick = ()=> togglePaid(e.id);
+      meta.appendChild(statusBtn);
+
+      row.appendChild(meta);
+      expPanel.appendChild(row);
+    });
+    const addE = el('button','btn-ghost','+ adicionar despesa');
+    addE.onclick = addExpense;
+    expPanel.appendChild(addE);
+    wrap.appendChild(expPanel);
+
+    // Caixinhas agrupadas por conta poupança
+    const caixPanel = el('div','panel');
+    const headC = el('div','panel-head');
+    headC.innerHTML = `<h2>Caixinhas</h2><span class="eyebrow">${fmt(totalDeposited())} depositado</span>`;
+    caixPanel.appendChild(headC);
+
+    function renderCaixinhaRows(c, tbody){
+      const st = getCaixinhaStatus(c.id);
+      const tr = el('tr');
+
+      const tdName = el('td');
+      const nameInput = el('input','caix-cell-input');
+      nameInput.value = c.name;
+      nameInput.oninput = ev=> updateSilent(s=>{ s.caixinhas.find(x=>x.id===c.id).name = ev.target.value; });
+      tdName.appendChild(nameInput);
+
+      const contaSelect = el('select','caix-conta-select');
+      const noneOpt = el('option'); noneOpt.value=''; noneOpt.textContent='Sem conta';
+      if(!c.contaId) noneOpt.selected = true;
+      contaSelect.appendChild(noneOpt);
+      state.contas.forEach(ct=>{
+        const opt = el('option'); opt.value=ct.id; opt.textContent=ct.name;
+        if(c.contaId===ct.id) opt.selected = true;
+        contaSelect.appendChild(opt);
+      });
+      contaSelect.onchange = ev=> update(s=>{ s.caixinhas.find(x=>x.id===c.id).contaId = ev.target.value || null; });
+      tdName.appendChild(contaSelect);
+      tr.appendChild(tdName);
+
+      const tdPrev = el('td');
+      const prevInput = el('input','caix-cell-input caix-num');
+      prevInput.type='number'; prevInput.step='0.01'; prevInput.value = c.saldoAnterior;
+      prevInput.oninput = ev=> updateSilent(s=>{ s.caixinhas.find(x=>x.id===c.id).saldoAnterior = ev.target.value; });
+      prevInput.onblur = ()=> render();
+      tdPrev.appendChild(prevInput);
+      tr.appendChild(tdPrev);
+
+      const tdIn = el('td','td-entrada');
+      const inWrap = el('div','entrada-cell');
+      const inInput = el('input','caix-cell-input caix-num');
+      inInput.type='number'; inInput.step='0.01'; inInput.value = c.monthlyValue;
+      inInput.oninput = ev=> updateSilent(s=>{ s.caixinhas.find(x=>x.id===c.id).monthlyValue = ev.target.value; });
+      inInput.onblur = ()=> render();
+      const depDot = el('button','dep-toggle '+(st.deposited?'on':''), st.deposited?'✓':'');
+      depDot.title = st.deposited ? 'Depositado — clique para desfazer' : 'Ainda não depositado — clique para confirmar';
+      depDot.onclick = ()=> toggleDeposit(c.id);
+      inWrap.appendChild(depDot); inWrap.appendChild(inInput);
+      tdIn.appendChild(inWrap);
+
+      const payerSelect = el('select','caix-payer-select');
+      state.people.forEach(p=>{
+        const opt = el('option'); opt.value=p.id; opt.textContent=p.name;
+        if(st.payerId===p.id) opt.selected = true;
+        payerSelect.appendChild(opt);
+      });
+      payerSelect.title = 'Quem depositou / vai depositar';
+      payerSelect.onchange = ev=> update(()=>{ getCaixinhaStatus(c.id).payerId = ev.target.value; });
+      tdIn.appendChild(payerSelect);
+      tr.appendChild(tdIn);
+
+      const tdOut = el('td');
+      const outBtn = el('button','caix-out-btn', fmt(caixinhaSaidasTotal(c)));
+      outBtn.title = 'Clique para detalhar saídas';
+      outBtn.onclick = ()=>{
+        expandedCaixinhas.has(c.id) ? expandedCaixinhas.delete(c.id) : expandedCaixinhas.add(c.id);
+        render();
+      };
+      tdOut.appendChild(outBtn);
+      tr.appendChild(tdOut);
+
+      const tdFinal = el('td','td-final');
+      tdFinal.textContent = fmt(caixinhaSaldo(c));
+      tr.appendChild(tdFinal);
+
+      const tdRm = el('td');
+      const rm = el('button','btn-danger-text','✕');
+      rm.onclick = ()=> removeCaixinha(c.id);
+      tdRm.appendChild(rm);
+      tr.appendChild(tdRm);
+
+      tbody.appendChild(tr);
+
+      if(expandedCaixinhas.has(c.id)){
+        const trExp = el('tr','tr-expand');
+        const tdExp = el('td'); tdExp.colSpan = 6;
+        const expWrap = el('div','caixinha-saidas');
+        (st.saidas||[]).forEach(sd=>{
+          const line = el('div','saida-line');
+          const descInput = el('input'); descInput.value = sd.desc; descInput.style.flex='2';
+          descInput.oninput = ev=> updateSilent(()=>{ getCaixinhaStatus(c.id).saidas.find(x=>x.id===sd.id).desc = ev.target.value; });
+          const valInput2 = el('input'); valInput2.type='number'; valInput2.step='0.01'; valInput2.value=sd.value; valInput2.style.width='90px';
+          valInput2.oninput = ev=> updateSilent(()=>{ getCaixinhaStatus(c.id).saidas.find(x=>x.id===sd.id).value = ev.target.value; });
+          valInput2.onblur = ()=> render();
+          const rmS = el('button','btn-danger-text','✕');
+          rmS.onclick = ()=> removeSaida(c.id, sd.id);
+          line.appendChild(descInput); line.appendChild(valInput2); line.appendChild(rmS);
+          expWrap.appendChild(line);
+        });
+        const addS = el('button','btn-ghost','+ registrar saída');
+        addS.style.fontSize='12px'; addS.style.padding='6px';
+        addS.onclick = ()=> addSaida(c.id);
+        expWrap.appendChild(addS);
+        tdExp.appendChild(expWrap);
+        trExp.appendChild(tdExp);
+        tbody.appendChild(trExp);
+      }
+    }
+
+    function groupHeaderRow(tbody, title, total, onRename, onRemove, type, onToggleType){
+      const tr = el('tr','conta-group-row');
+      const td = el('td'); td.colSpan = 6;
+      const box = el('div','conta-header '+(type==='casa'?'conta-header-casa':''));
+      if(onToggleType){
+        const typeBtn = el('button','conta-type-btn', type==='casa' ? '🏠' : '🏦');
+        typeBtn.title = type==='casa' ? 'Guardado em casa — clique para marcar como conta bancária' : 'Conta bancária — clique para marcar como guardado em casa';
+        typeBtn.onclick = onToggleType;
+        box.appendChild(typeBtn);
+      }
+      if(onRename){
+        const input = el('input','conta-header-input');
+        input.value = title;
+        input.oninput = ev=> updateSilent(()=> onRename(ev.target.value));
+        box.appendChild(input);
+      } else {
+        box.appendChild(el('span','conta-header-static', title));
+      }
+      box.appendChild(el('span','conta-header-total', fmt(total)));
+      if(onRemove){
+        const rm = el('button','btn-danger-text','✕');
+        rm.title='Remover';
+        rm.onclick = onRemove;
+        box.appendChild(rm);
+      }
+      td.appendChild(box);
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+
+    if(state.caixinhas.length===0 && state.contas.length===0){
+      caixPanel.appendChild(el('div','empty','Nenhuma caixinha ainda. Crie uma conta poupança e a primeira meta de reserva.'));
+    } else {
+      const table = el('table','caix-table');
+      const thead = el('thead','', `<tr>
+        <th></th><th>Saldo ant.</th><th>Entrada</th><th>Saída</th><th>Saldo final</th><th></th>
+      </tr>`);
+      table.appendChild(thead);
+      const tbody = el('tbody');
+
+      state.contas.forEach(ct=>{
+        groupHeaderRow(tbody, ct.name, contaTotal(ct.id),
+          (val)=>{ state.contas.find(x=>x.id===ct.id).name = val; },
+          ()=> removeConta(ct.id),
+          ct.type,
+          ()=> toggleContaType(ct.id)
+        );
+        state.caixinhas.filter(c=>c.contaId===ct.id).forEach(c=> renderCaixinhaRows(c, tbody));
+      });
+
+      const semConta = state.caixinhas.filter(c=> !c.contaId || !state.contas.find(ct=>ct.id===c.contaId));
+      if(semConta.length>0){
+        groupHeaderRow(tbody, 'Sem local vinculado', semConta.reduce((s,c)=>s+caixinhaSaldo(c),0), null, null, null, null);
+        semConta.forEach(c=> renderCaixinhaRows(c, tbody));
+      }
+
+      table.appendChild(tbody);
+      caixPanel.appendChild(table);
+    }
+
+    const addRow = el('div','row');
+    addRow.style.marginTop='8px';
+    const addConta_ = el('button','btn-ghost','+ novo local de guarda (banco ou casa)');
+    addConta_.onclick = addConta;
+    const addC = el('button','btn-ghost','+ adicionar caixinha');
+    addC.onclick = addCaixinha;
+    addRow.appendChild(addConta_); addRow.appendChild(addC);
+    caixPanel.appendChild(addRow);
+    wrap.appendChild(caixPanel);
+
+    // Previsão — como fica se tudo for pago
+    if(state.people.length>0){
+      const prevPanel = el('div','panel');
+      const headPrev = el('div','panel-head');
+      headPrev.innerHTML = '<h2>Previsão</h2><span class="eyebrow">se tudo for pago</span>';
+      prevPanel.appendChild(headPrev);
+      const prevGrid = el('div','person-grid');
+      state.people.forEach(p=>{
+        const income = personIncome(p.id);
+        const assigned = personAssignedTotal(p.id);
+        const projected = income - assigned;
+        const card = el('div','person-card');
+        card.innerHTML = `
+          <div class="person-name">${p.name}</div>
+          <div class="person-row"><span>Entrada</span><span>${fmt(income)}</span></div>
+          <div class="person-row"><span>Total atribuído</span><span class="person-paid">${fmt(assigned)}</span></div>
+          <div class="person-row person-rest"><span>Saldo previsto</span><span class="${projected>=0?'positive':'negative'}">${fmt(projected)}</span></div>
+        `;
+        prevGrid.appendChild(card);
+      });
+      prevPanel.appendChild(prevGrid);
+      wrap.appendChild(prevPanel);
+    }
+
+    const footer = el('div','footer-actions');
+    const closeBtn = el('button','btn-primary','Fechar mês e ir para o próximo →');
+    closeBtn.style.padding='11px 18px';
+    closeBtn.style.fontSize='14px';
+    closeBtn.onclick = closeMonth;
+    footer.appendChild(closeBtn);
+    footer.appendChild(el('div', null, '<br>'));
+    const resetBtn = el('button','','Restaurar lista padrão de despesas/caixinhas');
+    resetBtn.style.marginTop='8px';
+    resetBtn.onclick = ()=>{
+      if(!confirm('Isso substitui despesas e caixinhas atuais pela lista padrão (mantém nomes e valores de entrada). Continuar?')) return;
+      update(s=>{
+        const fresh = defaultState();
+        s.expenses = fresh.expenses.map(e=>({...e, defaultPayerId: s.people[0]?.id || e.defaultPayerId}));
+        s.caixinhas = fresh.caixinhas;
+        s.contas = fresh.contas;
+      });
+    };
+    footer.appendChild(resetBtn);
+    const changeBtn = el('button','','Trocar código de sincronização');
+    changeBtn.style.marginTop='6px';
+    changeBtn.onclick = ()=>{
+      if(!confirm('Isso desconecta este aparelho do código de sincronização atual. Você vai precisar digitar o código novamente. Continuar?')) return;
+      try{
+        localStorage.removeItem('gastos_fb_config');
+        localStorage.removeItem('gastos_household_id');
+      }catch(e){}
+      window.location.reload();
+    };
+    footer.appendChild(changeBtn);
+    wrap.appendChild(footer);
+
+    return wrap;
+  }
+
+  function renderHistory(){
+    const wrap = el('div');
+    const panel = el('div','panel');
+    panel.appendChild(el('h2',null,'Histórico mensal'));
+    if(state.history.length===0){
+      panel.appendChild(el('div','empty','Feche o primeiro mês na aba Início para começar o histórico.'));
+      wrap.appendChild(panel);
+      return wrap;
+    }
+
+    const chart = el('div','panel');
+    const legend = el('div','legend','<span><i class="dot" style="background:var(--teal)"></i>Entradas</span><span><i class="dot" style="background:var(--amber)"></i>Gastos pagos</span>');
+    chart.appendChild(legend);
+    const maxVal = Math.max(1, ...state.history.map(h=> Math.max(h.totalIncome, h.totalExpensePaid)));
+    state.history.slice().reverse().forEach(h=>{
+      const r1 = el('div','bar-row');
+      r1.innerHTML = `<div class="bar-label">${monthLabel(h.month)}</div><div class="bar-track"><div class="bar-fill-income" style="width:${(h.totalIncome/maxVal*100).toFixed(1)}%"></div></div><div class="bar-value">${fmt(h.totalIncome)}</div>`;
+      chart.appendChild(r1);
+      const r2 = el('div','bar-row');
+      r2.innerHTML = `<div class="bar-label"></div><div class="bar-track"><div class="bar-fill-expense" style="width:${(h.totalExpensePaid/maxVal*100).toFixed(1)}%"></div></div><div class="bar-value">${fmt(h.totalExpensePaid)}</div>`;
+      chart.appendChild(r2);
+    });
+    wrap.appendChild(chart);
+
+    const listPanel = el('div','panel');
+    listPanel.appendChild(el('h2',null,'Detalhe por mês'));
+    state.history.slice().reverse().forEach(h=>{
+      const line = el('div','hist-month');
+      line.innerHTML = `<span>${monthLabel(h.month)}</span><span>Entradas ${fmt(h.totalIncome)} · Gasto ${fmt(h.totalExpensePaid)} · Caixinhas ${fmt(h.totalDeposited)} · Saldo <strong>${fmt(h.saldo)}</strong></span>`;
+      listPanel.appendChild(line);
+    });
+    wrap.appendChild(listPanel);
+
+    return wrap;
+  }
+
+  loadState();
+})();
+</script>
+
+<script>
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('sw.js').catch(err=> console.warn('SW falhou:', err));
+    });
+  }
+</script>
+
+</body>
+</html>
