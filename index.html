@@ -176,6 +176,11 @@
   .caix-conta-select:focus{ outline:none; }
   .caix-payer-select{ display:block; width:100%; border:none; background:transparent; font-size:10.5px; color:var(--ink-soft); padding:0 5px; margin-top:2px; }
   .caix-payer-select:focus{ outline:none; }
+  .caix-skip-btn{ border:none; background:transparent; padding:1px 4px; font-size:10px; font-weight:600; color:var(--ink-soft); }
+  .caix-skip-btn:hover{ color:var(--red); }
+  .caix-skip-btn.on{ color:var(--red); }
+  tr.caix-row-skipped td{ opacity:0.5; }
+  tr.caix-row-skipped .caix-cell-input{ text-decoration:line-through; }
 
   .empty{ color:var(--ink-soft); font-size:13px; text-align:center; padding:14px 0; }
   .footer-actions{ text-align:center; margin-top:24px; }
@@ -292,7 +297,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
         { id: contaIds.casa, name: 'Guardado em casa', type: 'casa' }
       ],
       caixinhas: caixinhaDefs.map(([name, monthlyValue, contaKey]) => ({
-        id: uid(), name, monthlyValue, saldoAnterior: 0,
+        id: uid(), name, monthlyValue, saldoAnterior: 0, skip: false,
         contaId: contaIds[contaKey] || null, defaultPayerId: marcelo
       })),
       monthlyCaixinhas: {}, // month -> [ {id,name,monthlyValue,saldoAnterior,contaId,defaultPayerId} ]
@@ -331,8 +336,11 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     });
     if(!state.monthlyCaixinhas){
       state.monthlyCaixinhas = {};
-      state.monthlyCaixinhas[state.currentMonth] = (state.caixinhas||[]).map(c=>({ ...c }));
+      state.monthlyCaixinhas[state.currentMonth] = (state.caixinhas||[]).map(c=>({ ...c, skip: !!c.skip }));
     }
+    Object.values(state.monthlyCaixinhas).forEach(list=>{
+      list.forEach(c=>{ if(c.skip===undefined) c.skip = false; });
+    });
     if(!state.monthlyIncomes){
       state.monthlyIncomes = {};
       state.monthlyIncomes[state.currentMonth] = state.incomes || {};
@@ -575,6 +583,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
   }
   function totalDeposited(){
     return getMonthCaixinhas(state.currentMonth).reduce((s,c)=>{
+      if(c.skip) return s;
       const st = getCaixinhaStatus(c.id);
       return s + (st.deposited ? (Number(c.monthlyValue)||0) : 0);
     }, 0);
@@ -606,6 +615,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       return s;
     }, 0);
     const fromCaixinhas = getMonthCaixinhas(state.currentMonth).reduce((s,c)=>{
+      if(c.skip) return s;
       const st = getCaixinhaStatus(c.id);
       if(st.payerId===personId) return s + (Number(c.monthlyValue)||0);
       return s;
@@ -621,6 +631,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       return s;
     }, 0);
     const fromCaixinhas = getMonthCaixinhas(state.currentMonth).reduce((s,c)=>{
+      if(c.skip) return s;
       const st = getCaixinhaStatus(c.id);
       if(st.deposited && st.payerId===personId) return s + (Number(c.monthlyValue)||0);
       return s;
@@ -723,6 +734,12 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     update(s=>{
       const st = getCaixinhaStatus(id);
       st.deposited = !st.deposited;
+    });
+  }
+  function toggleCaixinhaSkip(id){
+    update(s=>{
+      const c = getMonthCaixinhas(s.currentMonth).find(x=>x.id===id);
+      c.skip = !c.skip;
     });
   }
   function addSaida(cid){
@@ -976,13 +993,17 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
 
     function renderCaixinhaRows(c, tbody){
       const st = getCaixinhaStatus(c.id);
-      const tr = el('tr');
+      const tr = el('tr', c.skip ? 'caix-row-skipped' : '');
 
       const tdName = el('td');
       const nameInput = el('input','caix-cell-input');
       nameInput.value = c.name;
       nameInput.oninput = ev=> updateSilent(s=>{ getMonthCaixinhas(s.currentMonth).find(x=>x.id===c.id).name = ev.target.value; });
       tdName.appendChild(nameInput);
+      const skipBtn = el('button','caix-skip-btn'+(c.skip?' on':''), c.skip ? '↩ considerar' : 'ignorar mês');
+      skipBtn.title = c.skip ? 'Voltar a considerar esta caixinha neste mês' : 'Ignorar esta caixinha só neste mês, sem apagar (não afeta outros meses)';
+      skipBtn.onclick = ()=> toggleCaixinhaSkip(c.id);
+      tdName.appendChild(skipBtn);
 
       const contaSelect = el('select','caix-conta-select');
       const noneOpt = el('option'); noneOpt.value=''; noneOpt.textContent='Sem conta';
@@ -1013,6 +1034,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       inInput.onblur = ()=> render();
       const depDot = el('button','dep-toggle '+(st.deposited?'on':''), st.deposited?'✓':'');
       depDot.title = st.deposited ? 'Depositado — clique para desfazer' : 'Ainda não depositado — clique para confirmar';
+      if(c.skip){ depDot.disabled = true; depDot.title = 'Caixinha ignorada neste mês'; }
       depDot.onclick = ()=> toggleDeposit(c.id);
       inWrap.appendChild(depDot); inWrap.appendChild(inInput);
       tdIn.appendChild(inWrap);
