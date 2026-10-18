@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gastos-cache-v1';
+const CACHE_NAME = 'gastos-cache-v2';
 const APP_SHELL = [
   './index.html',
   './manifest.json',

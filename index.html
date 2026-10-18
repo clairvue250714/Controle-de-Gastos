@@ -109,6 +109,10 @@
   .expense-meta{ display:flex; gap:8px; align-items:center; margin-top:4px; }
   .expense-value{ font-variant-numeric: tabular-nums; font-weight:600; min-width:88px; text-align:right; }
   .order-input{ text-align:center; padding:8px 4px; font-weight:700; color:var(--ink-soft); flex-shrink:0; }
+  .expense-row.skipped{ opacity:0.5; }
+  .expense-row.skipped .grow{ text-decoration:line-through; }
+  .pill-skip{ background:var(--red-soft); color:var(--red); }
+  .pill-skip-off{ background:transparent; border:1px dashed var(--line); color:var(--ink-soft); }
 
   .income-card{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; }
   .income-name-input{ font-weight:600; border:none; padding:2px 0; background:transparent; }
@@ -272,10 +276,14 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
         { id: gabriela, name: 'Gabriela' }
       ],
       monthlyIncomes: {}, // month -> { personId: value }
+      // "expenses"/"caixinhas" abaixo são apenas o MODELO inicial (usado para semear
+      // o primeiro mês). A partir daí, cada mês tem sua própria cópia independente
+      // em monthlyExpenses/monthlyCaixinhas — editar um mês não afeta os outros.
       expenses: expenseNames.map(([name, value], idx) => ({
-        id: uid(), name, value, auto: false,
+        id: uid(), name, value, auto: false, skip: false,
         defaultPayerId: marcelo, order: idx+1
       })),
+      monthlyExpenses: {}, // month -> [ {id,name,value,auto,autoDay,order,defaultPayerId,skip} ]
       monthlyExpenseStatus: {}, // month -> { expenseId: {paid, payerId} }
       contas: [
         { id: contaIds.ferias, name: 'Poupança férias', type: 'banco' },
@@ -287,6 +295,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
         id: uid(), name, monthlyValue, saldoAnterior: 0,
         contaId: contaIds[contaKey] || null, defaultPayerId: marcelo
       })),
+      monthlyCaixinhas: {}, // month -> [ {id,name,monthlyValue,saldoAnterior,contaId,defaultPayerId} ]
       monthlyCaixinhaStatus: {}, // month -> { caixinhaId: {deposited, saidas} }
       history: [] // { month, totalIncome, totalExpensePaid, totalDeposited, saldo }
     };
@@ -310,6 +319,19 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     }
     if(state.caixinhas && state.caixinhas.some(c=> c.defaultPayerId===undefined)){
       state.caixinhas.forEach(c=>{ if(c.defaultPayerId===undefined) c.defaultPayerId = state.people[0]?.id || null; });
+    }
+    if(!state.monthlyExpenses){
+      // Primeira vez com independência por mês: a lista global antiga vira
+      // a cópia do mês atual, e segue daqui pra frente como independente.
+      state.monthlyExpenses = {};
+      state.monthlyExpenses[state.currentMonth] = (state.expenses||[]).map(e=>({ ...e, skip: !!e.skip }));
+    }
+    Object.values(state.monthlyExpenses).forEach(list=>{
+      list.forEach(e=>{ if(e.skip===undefined) e.skip = false; });
+    });
+    if(!state.monthlyCaixinhas){
+      state.monthlyCaixinhas = {};
+      state.monthlyCaixinhas[state.currentMonth] = (state.caixinhas||[]).map(c=>({ ...c }));
     }
     if(!state.monthlyIncomes){
       state.monthlyIncomes = {};
@@ -473,6 +495,36 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     if(!state.monthlyIncomes[m]) state.monthlyIncomes[m] = {};
     return state.monthlyIncomes[m];
   }
+  // ---------- despesas/caixinhas: cópia independente por mês ----------
+  // Cada mês tem sua própria lista. Ao visitar um mês pela primeira vez,
+  // ela nasce como cópia do mês mais próximo já existente (ou do modelo
+  // inicial, se nenhum mês existir ainda). Depois disso, editar um mês
+  // não altera nenhum outro.
+  function seedSourceKey(map, m){
+    const keys = Object.keys(map);
+    if(keys.length===0) return null;
+    const before = keys.filter(k=> k < m).sort();
+    if(before.length>0) return before[before.length-1];
+    return keys.sort()[0];
+  }
+  function getMonthExpenses(m){
+    if(!state.monthlyExpenses) state.monthlyExpenses = {};
+    if(!state.monthlyExpenses[m]){
+      const srcKey = seedSourceKey(state.monthlyExpenses, m);
+      const src = srcKey ? state.monthlyExpenses[srcKey] : state.expenses;
+      state.monthlyExpenses[m] = (src||[]).map(e=>({...e}));
+    }
+    return state.monthlyExpenses[m];
+  }
+  function getMonthCaixinhas(m){
+    if(!state.monthlyCaixinhas) state.monthlyCaixinhas = {};
+    if(!state.monthlyCaixinhas[m]){
+      const srcKey = seedSourceKey(state.monthlyCaixinhas, m);
+      const src = srcKey ? state.monthlyCaixinhas[srcKey] : state.caixinhas;
+      state.monthlyCaixinhas[m] = (src||[]).map(c=>({...c}));
+    }
+    return state.monthlyCaixinhas[m];
+  }
   function ensureExpenseStatusBucket(m){
     if(!state.monthlyExpenseStatus) state.monthlyExpenseStatus = {};
     if(!state.monthlyExpenseStatus[m]) state.monthlyExpenseStatus[m] = {};
@@ -481,7 +533,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
   function getExpenseStatus(id){
     const bucket = ensureExpenseStatusBucket(state.currentMonth);
     if(!bucket[id]){
-      const e = state.expenses.find(x=>x.id===id);
+      const e = getMonthExpenses(state.currentMonth).find(x=>x.id===id);
       bucket[id] = { paid: false, payerId: e ? e.defaultPayerId : null };
     }
     return bucket[id];
@@ -494,7 +546,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
   function getCaixinhaStatus(id){
     const bucket = ensureCaixinhaStatusBucket(state.currentMonth);
     if(!bucket[id]){
-      const c = state.caixinhas.find(x=>x.id===id);
+      const c = getMonthCaixinhas(state.currentMonth).find(x=>x.id===id);
       bucket[id] = { deposited: false, saidas: [], payerId: c ? c.defaultPayerId : null };
     }
     return bucket[id];
@@ -506,21 +558,23 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     return state.people.reduce((s,p)=> s + (Number(inc[p.id])||0), 0);
   }
   function totalExpensePaid(){
-    return state.expenses.reduce((s,e)=>{
+    return getMonthExpenses(state.currentMonth).reduce((s,e)=>{
+      if(e.skip) return s;
       const st = getExpenseStatus(e.id);
       const paid = isExpensePaid(e, st, state.currentMonth);
       return s + (paid ? (Number(e.value)||0) : 0);
     }, 0);
   }
   function totalExpensePending(){
-    return state.expenses.reduce((s,e)=>{
+    return getMonthExpenses(state.currentMonth).reduce((s,e)=>{
+      if(e.skip) return s;
       const st = getExpenseStatus(e.id);
       const paid = isExpensePaid(e, st, state.currentMonth);
       return s + (!paid ? (Number(e.value)||0) : 0);
     }, 0);
   }
   function totalDeposited(){
-    return state.caixinhas.reduce((s,c)=>{
+    return getMonthCaixinhas(state.currentMonth).reduce((s,c)=>{
       const st = getCaixinhaStatus(c.id);
       return s + (st.deposited ? (Number(c.monthlyValue)||0) : 0);
     }, 0);
@@ -535,7 +589,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     return (Number(c.saldoAnterior)||0) + entrada - caixinhaSaidasTotal(c);
   }
   function contaTotal(contaId){
-    return state.caixinhas.filter(c=>c.contaId===contaId).reduce((s,c)=> s + caixinhaSaldo(c), 0);
+    return getMonthCaixinhas(state.currentMonth).filter(c=>c.contaId===contaId).reduce((s,c)=> s + caixinhaSaldo(c), 0);
   }
   function saldoFinal(){
     return totalIncome() - totalExpensePaid() - totalDeposited();
@@ -545,12 +599,13 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     return Number(inc[personId]) || 0;
   }
   function personAssignedTotal(personId){
-    const fromExpenses = state.expenses.reduce((s,e)=>{
+    const fromExpenses = getMonthExpenses(state.currentMonth).reduce((s,e)=>{
+      if(e.skip) return s;
       const st = getExpenseStatus(e.id);
       if(st.payerId===personId) return s + (Number(e.value)||0);
       return s;
     }, 0);
-    const fromCaixinhas = state.caixinhas.reduce((s,c)=>{
+    const fromCaixinhas = getMonthCaixinhas(state.currentMonth).reduce((s,c)=>{
       const st = getCaixinhaStatus(c.id);
       if(st.payerId===personId) return s + (Number(c.monthlyValue)||0);
       return s;
@@ -558,13 +613,14 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     return fromExpenses + fromCaixinhas;
   }
   function personPaid(personId){
-    const fromExpenses = state.expenses.reduce((s,e)=>{
+    const fromExpenses = getMonthExpenses(state.currentMonth).reduce((s,e)=>{
+      if(e.skip) return s;
       const st = getExpenseStatus(e.id);
       const paid = isExpensePaid(e, st, state.currentMonth);
       if(paid && st.payerId===personId) return s + (Number(e.value)||0);
       return s;
     }, 0);
-    const fromCaixinhas = state.caixinhas.reduce((s,c)=>{
+    const fromCaixinhas = getMonthCaixinhas(state.currentMonth).reduce((s,c)=>{
       const st = getCaixinhaStatus(c.id);
       if(st.deposited && st.payerId===personId) return s + (Number(c.monthlyValue)||0);
       return s;
@@ -580,18 +636,19 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     update(s=>{
       s.people = s.people.filter(p=>p.id!==id);
       Object.values(s.monthlyIncomes||{}).forEach(bucket=> delete bucket[id]);
-      s.expenses.forEach(e=>{ if(e.defaultPayerId===id) e.defaultPayerId=null; });
+      Object.values(s.monthlyExpenses||{}).forEach(list=> list.forEach(e=>{ if(e.defaultPayerId===id) e.defaultPayerId=null; }));
       Object.values(s.monthlyExpenseStatus||{}).forEach(bucket=>{
         Object.values(bucket).forEach(st=>{ if(st.payerId===id) st.payerId=null; });
       });
-      s.caixinhas.forEach(c=>{ if(c.defaultPayerId===id) c.defaultPayerId=null; });
+      Object.values(s.monthlyCaixinhas||{}).forEach(list=> list.forEach(c=>{ if(c.defaultPayerId===id) c.defaultPayerId=null; }));
       Object.values(s.monthlyCaixinhaStatus||{}).forEach(bucket=>{
         Object.values(bucket).forEach(st=>{ if(st.payerId===id) st.payerId=null; });
       });
     });
   }
   function reorderExpense(id, desiredOrder){
-    const list = state.expenses.slice().sort((a,b)=> (a.order||9999) - (b.order||9999));
+    const monthList = getMonthExpenses(state.currentMonth);
+    const list = monthList.slice().sort((a,b)=> (a.order||9999) - (b.order||9999));
     const item = list.find(x=>x.id===id);
     if(!item) return;
     list.splice(list.indexOf(item), 1);
@@ -600,34 +657,49 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     list.forEach((x, idx)=>{ x.order = idx+1; });
   }
   function addExpense(){
-    update(s=> s.expenses.push({
-      id: uid(), name:'Nova despesa', value:0, auto:false,
-      defaultPayerId: s.people[0]?.id || null,
-      order: (Math.max(0, ...s.expenses.map(e=>e.order||0)) + 1)
-    }));
+    update(s=>{
+      const list = getMonthExpenses(s.currentMonth);
+      list.push({
+        id: uid(), name:'Nova despesa', value:0, auto:false, skip:false,
+        defaultPayerId: s.people[0]?.id || null,
+        order: (Math.max(0, ...list.map(e=>e.order||0)) + 1)
+      });
+    });
   }
   function removeExpense(id){
-    update(s=> s.expenses = s.expenses.filter(e=>e.id!==id));
+    update(s=>{
+      s.monthlyExpenses[s.currentMonth] = getMonthExpenses(s.currentMonth).filter(e=>e.id!==id);
+    });
   }
   function toggleAuto(id){
     update(s=>{
-      const e = s.expenses.find(x=>x.id===id);
+      const e = getMonthExpenses(s.currentMonth).find(x=>x.id===id);
       e.auto = !e.auto;
+    });
+  }
+  function toggleSkip(id){
+    update(s=>{
+      const e = getMonthExpenses(s.currentMonth).find(x=>x.id===id);
+      e.skip = !e.skip;
     });
   }
   function togglePaid(id){
     update(s=>{
-      const e = s.expenses.find(x=>x.id===id);
+      const e = getMonthExpenses(s.currentMonth).find(x=>x.id===id);
       if(e.auto && e.autoDay) return;
       const st = getExpenseStatus(id);
       st.paid = !st.paid;
     });
   }
   function addCaixinha(){
-    update(s=> s.caixinhas.push({ id:uid(), name:'Nova caixinha', monthlyValue:0, saldoAnterior:0, contaId:null, defaultPayerId: s.people[0]?.id || null }));
+    update(s=>{
+      getMonthCaixinhas(s.currentMonth).push({ id:uid(), name:'Nova caixinha', monthlyValue:0, saldoAnterior:0, contaId:null, defaultPayerId: s.people[0]?.id || null });
+    });
   }
   function removeCaixinha(id){
-    update(s=> s.caixinhas = s.caixinhas.filter(c=>c.id!==id));
+    update(s=>{
+      s.monthlyCaixinhas[s.currentMonth] = getMonthCaixinhas(s.currentMonth).filter(c=>c.id!==id);
+    });
   }
   function addConta(){
     update(s=>{
@@ -644,7 +716,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
   function removeConta(id){
     update(s=>{
       s.contas = s.contas.filter(c=>c.id!==id);
-      s.caixinhas.forEach(c=>{ if(c.contaId===id) c.contaId=null; });
+      Object.values(s.monthlyCaixinhas||{}).forEach(list=> list.forEach(c=>{ if(c.contaId===id) c.contaId=null; }));
     });
   }
   function toggleDeposit(id){
@@ -669,6 +741,9 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
   function closeMonth(){
     if(!confirm(`Fechar ${monthLabel(state.currentMonth)}? As caixinhas vão herdar o saldo final como saldo anterior a partir do mês seguinte.`)) return;
     update(s=>{
+      const curCaixinhas = getMonthCaixinhas(s.currentMonth);
+      const finalBalances = {};
+      curCaixinhas.forEach(c=>{ finalBalances[c.id] = caixinhaSaldo(c); });
       s.history.push({
         month: s.currentMonth,
         totalIncome: totalIncome(),
@@ -676,10 +751,12 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
         totalDeposited: totalDeposited(),
         saldo: saldoFinal()
       });
-      s.caixinhas.forEach(c=>{
-        c.saldoAnterior = caixinhaSaldo(c);
+      const nextKey = nextMonthKey(s.currentMonth);
+      const nextCaixinhas = getMonthCaixinhas(nextKey); // cria a cópia do próximo mês se ainda não existir
+      nextCaixinhas.forEach(c=>{
+        if(finalBalances[c.id]!==undefined) c.saldoAnterior = finalBalances[c.id];
       });
-      s.currentMonth = nextMonthKey(s.currentMonth);
+      s.currentMonth = nextKey;
     });
   }
 
@@ -796,31 +873,32 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     wrap.appendChild(incomesPanel);
 
     // Expenses
+    const monthExpenses = getMonthExpenses(state.currentMonth);
     const expPanel = el('div','panel');
     const headE = el('div','panel-head');
     headE.innerHTML = `<h2>Despesas</h2><span class="eyebrow">${fmt(totalExpensePending())} pendente</span>`;
     expPanel.appendChild(headE);
-    if(state.expenses.length===0){
+    if(monthExpenses.length===0){
       expPanel.appendChild(el('div','empty','Nenhuma despesa ainda. Adicione a primeira abaixo.'));
     }
-    const sortedExpenses = state.expenses.slice().sort((a,b)=> (a.order||9999) - (b.order||9999));
+    const sortedExpenses = monthExpenses.slice().sort((a,b)=> (a.order||9999) - (b.order||9999));
     sortedExpenses.forEach(e=>{
       const st = getExpenseStatus(e.id);
-      const row = el('div','expense-row');
+      const row = el('div','expense-row'+(e.skip?' skipped':''));
       const top = el('div','row');
       const orderInput = el('input','order-input');
       orderInput.type='number'; orderInput.min='1'; orderInput.style.width='40px';
       orderInput.value = e.order || '';
       orderInput.title='Prioridade — o menor número fica no topo';
-      orderInput.oninput = ev=> updateSilent(s=>{ s.expenses.find(x=>x.id===e.id).order = Number(ev.target.value)||0; });
+      orderInput.oninput = ev=> updateSilent(s=>{ getMonthExpenses(s.currentMonth).find(x=>x.id===e.id).order = Number(ev.target.value)||0; });
       orderInput.onblur = ev=> update(()=> reorderExpense(e.id, Number(ev.target.value)||1));
       const nameInput = el('input');
       nameInput.value = e.name; nameInput.className='grow';
-      nameInput.oninput = ev=> updateSilent(s=>{ s.expenses.find(x=>x.id===e.id).name = ev.target.value; });
+      nameInput.oninput = ev=> updateSilent(s=>{ getMonthExpenses(s.currentMonth).find(x=>x.id===e.id).name = ev.target.value; });
       const valInput = el('input');
       valInput.type='number'; valInput.step='0.01'; valInput.style.width='100px';
       valInput.value = e.value;
-      valInput.oninput = ev=> updateSilent(s=>{ s.expenses.find(x=>x.id===e.id).value = ev.target.value; });
+      valInput.oninput = ev=> updateSilent(s=>{ getMonthExpenses(s.currentMonth).find(x=>x.id===e.id).value = ev.target.value; });
       valInput.onblur = ()=> render();
       const rm = el('button','btn-danger-text','✕');
       rm.onclick = ()=> removeExpense(e.id);
@@ -841,7 +919,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
         dayInput.style.width='52px';
         dayInput.value = e.autoDay || '';
         dayInput.placeholder='—';
-        dayInput.oninput = ev=> updateSilent(s=>{ s.expenses.find(x=>x.id===e.id).autoDay = ev.target.value; });
+        dayInput.oninput = ev=> updateSilent(s=>{ getMonthExpenses(s.currentMonth).find(x=>x.id===e.id).autoDay = ev.target.value; });
         dayWrap.appendChild(dayInput);
         meta.appendChild(dayWrap);
       }
@@ -861,19 +939,26 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       defWrap.title='Definir pagador atual como padrão para meses futuros';
       const defCheck = el('input'); defCheck.type='checkbox'; defCheck.style.width='auto';
       defCheck.checked = e.defaultPayerId === st.payerId;
-      defCheck.onchange = ()=> update(s=>{ const ex=s.expenses.find(x=>x.id===e.id); ex.defaultPayerId = getExpenseStatus(e.id).payerId; });
+      defCheck.onchange = ()=> update(s=>{ const ex=getMonthExpenses(s.currentMonth).find(x=>x.id===e.id); ex.defaultPayerId = getExpenseStatus(e.id).payerId; });
       defWrap.appendChild(defCheck);
       defWrap.appendChild(document.createTextNode('📌'));
       meta.appendChild(defWrap);
 
-      const hasAutoDay = e.auto && e.autoDay;
-      const paidNow = isExpensePaid(e, st, state.currentMonth);
-      const statusBtn = el('button','status-btn '+(paidNow?'status-paid':'status-pending'), paidNow?'✓ Pago':(hasAutoDay?'Aguardando débito':'Marcar pago'));
-      statusBtn.style.marginLeft='auto';
-      if(hasAutoDay){ statusBtn.disabled = true; statusBtn.title = paidNow ? 'Automático — já debitado' : 'Automático — ainda não chegou o dia do débito'; }
-      else if(e.auto){ statusBtn.title = 'Automático sem dia definido — confirme manualmente quando for debitado'; }
-      statusBtn.onclick = ()=> togglePaid(e.id);
-      meta.appendChild(statusBtn);
+      const skipBtn = el('button','pill '+(e.skip?'pill-skip':'pill-skip-off'), e.skip ? '↩ considerar' : 'ignorar mês');
+      skipBtn.title = e.skip ? 'Voltar a considerar esta despesa neste mês' : 'Ignorar esta despesa só neste mês, sem apagar (não afeta outros meses)';
+      skipBtn.onclick = ()=> toggleSkip(e.id);
+      meta.appendChild(skipBtn);
+
+      if(!e.skip){
+        const hasAutoDay = e.auto && e.autoDay;
+        const paidNow = isExpensePaid(e, st, state.currentMonth);
+        const statusBtn = el('button','status-btn '+(paidNow?'status-paid':'status-pending'), paidNow?'✓ Pago':(hasAutoDay?'Aguardando débito':'Marcar pago'));
+        statusBtn.style.marginLeft='auto';
+        if(hasAutoDay){ statusBtn.disabled = true; statusBtn.title = paidNow ? 'Automático — já debitado' : 'Automático — ainda não chegou o dia do débito'; }
+        else if(e.auto){ statusBtn.title = 'Automático sem dia definido — confirme manualmente quando for debitado'; }
+        statusBtn.onclick = ()=> togglePaid(e.id);
+        meta.appendChild(statusBtn);
+      }
 
       row.appendChild(meta);
       expPanel.appendChild(row);
@@ -896,7 +981,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       const tdName = el('td');
       const nameInput = el('input','caix-cell-input');
       nameInput.value = c.name;
-      nameInput.oninput = ev=> updateSilent(s=>{ s.caixinhas.find(x=>x.id===c.id).name = ev.target.value; });
+      nameInput.oninput = ev=> updateSilent(s=>{ getMonthCaixinhas(s.currentMonth).find(x=>x.id===c.id).name = ev.target.value; });
       tdName.appendChild(nameInput);
 
       const contaSelect = el('select','caix-conta-select');
@@ -908,14 +993,14 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
         if(c.contaId===ct.id) opt.selected = true;
         contaSelect.appendChild(opt);
       });
-      contaSelect.onchange = ev=> update(s=>{ s.caixinhas.find(x=>x.id===c.id).contaId = ev.target.value || null; });
+      contaSelect.onchange = ev=> update(s=>{ getMonthCaixinhas(s.currentMonth).find(x=>x.id===c.id).contaId = ev.target.value || null; });
       tdName.appendChild(contaSelect);
       tr.appendChild(tdName);
 
       const tdPrev = el('td');
       const prevInput = el('input','caix-cell-input caix-num');
       prevInput.type='number'; prevInput.step='0.01'; prevInput.value = c.saldoAnterior;
-      prevInput.oninput = ev=> updateSilent(s=>{ s.caixinhas.find(x=>x.id===c.id).saldoAnterior = ev.target.value; });
+      prevInput.oninput = ev=> updateSilent(s=>{ getMonthCaixinhas(s.currentMonth).find(x=>x.id===c.id).saldoAnterior = ev.target.value; });
       prevInput.onblur = ()=> render();
       tdPrev.appendChild(prevInput);
       tr.appendChild(tdPrev);
@@ -924,7 +1009,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       const inWrap = el('div','entrada-cell');
       const inInput = el('input','caix-cell-input caix-num');
       inInput.type='number'; inInput.step='0.01'; inInput.value = c.monthlyValue;
-      inInput.oninput = ev=> updateSilent(s=>{ s.caixinhas.find(x=>x.id===c.id).monthlyValue = ev.target.value; });
+      inInput.oninput = ev=> updateSilent(s=>{ getMonthCaixinhas(s.currentMonth).find(x=>x.id===c.id).monthlyValue = ev.target.value; });
       inInput.onblur = ()=> render();
       const depDot = el('button','dep-toggle '+(st.deposited?'on':''), st.deposited?'✓':'');
       depDot.title = st.deposited ? 'Depositado — clique para desfazer' : 'Ainda não depositado — clique para confirmar';
@@ -1021,7 +1106,8 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       tbody.appendChild(tr);
     }
 
-    if(state.caixinhas.length===0 && state.contas.length===0){
+    const monthCaixinhas = getMonthCaixinhas(state.currentMonth);
+    if(monthCaixinhas.length===0 && state.contas.length===0){
       caixPanel.appendChild(el('div','empty','Nenhuma caixinha ainda. Crie uma conta poupança e a primeira meta de reserva.'));
     } else {
       const table = el('table','caix-table');
@@ -1038,10 +1124,10 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
           ct.type,
           ()=> toggleContaType(ct.id)
         );
-        state.caixinhas.filter(c=>c.contaId===ct.id).forEach(c=> renderCaixinhaRows(c, tbody));
+        monthCaixinhas.filter(c=>c.contaId===ct.id).forEach(c=> renderCaixinhaRows(c, tbody));
       });
 
-      const semConta = state.caixinhas.filter(c=> !c.contaId || !state.contas.find(ct=>ct.id===c.contaId));
+      const semConta = monthCaixinhas.filter(c=> !c.contaId || !state.contas.find(ct=>ct.id===c.contaId));
       if(semConta.length>0){
         groupHeaderRow(tbody, 'Sem local vinculado', semConta.reduce((s,c)=>s+caixinhaSaldo(c),0), null, null, null, null);
         semConta.forEach(c=> renderCaixinhaRows(c, tbody));
@@ -1092,14 +1178,15 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     closeBtn.onclick = closeMonth;
     footer.appendChild(closeBtn);
     footer.appendChild(el('div', null, '<br>'));
-    const resetBtn = el('button','','Restaurar lista padrão de despesas/caixinhas');
+    const resetBtn = el('button','','Restaurar lista padrão de despesas/caixinhas deste mês');
     resetBtn.style.marginTop='8px';
+    resetBtn.title = 'Restaura só o mês que você está vendo agora — os outros meses não mudam';
     resetBtn.onclick = ()=>{
-      if(!confirm('Isso substitui despesas e caixinhas atuais pela lista padrão (mantém nomes e valores de entrada). Continuar?')) return;
+      if(!confirm(`Isso substitui despesas e caixinhas de ${monthLabel(state.currentMonth)} pela lista padrão (não afeta outros meses). Continuar?`)) return;
       update(s=>{
         const fresh = defaultState();
-        s.expenses = fresh.expenses.map(e=>({...e, defaultPayerId: s.people[0]?.id || e.defaultPayerId}));
-        s.caixinhas = fresh.caixinhas;
+        s.monthlyExpenses[s.currentMonth] = fresh.expenses.map(e=>({...e, defaultPayerId: s.people[0]?.id || e.defaultPayerId}));
+        s.monthlyCaixinhas[s.currentMonth] = fresh.caixinhas;
         s.contas = fresh.contas;
       });
     };
