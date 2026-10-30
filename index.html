@@ -677,6 +677,19 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       });
     });
   }
+  function duplicateExpense(id){
+    update(s=>{
+      const list = getMonthExpenses(s.currentMonth);
+      const orig = list.find(x=>x.id===id);
+      if(!orig) return;
+      const origStatus = getExpenseStatus(id);
+      const copy = { ...orig, id: uid(), skip: false, order: (orig.order||0) + 0.5 };
+      list.push(copy);
+      // o novo item começa como não pago, com o mesmo pagador do original
+      ensureExpenseStatusBucket(s.currentMonth)[copy.id] = { paid:false, payerId: origStatus.payerId };
+      reorderExpense(copy.id, Math.floor(copy.order) + 1);
+    });
+  }
   function removeExpense(id){
     update(s=>{
       s.monthlyExpenses[s.currentMonth] = getMonthExpenses(s.currentMonth).filter(e=>e.id!==id);
@@ -919,7 +932,10 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       valInput.onblur = ()=> render();
       const rm = el('button','btn-danger-text','✕');
       rm.onclick = ()=> removeExpense(e.id);
-      top.appendChild(orderInput); top.appendChild(nameInput); top.appendChild(valInput); top.appendChild(rm);
+      const dup = el('button','btn-danger-text','⧉');
+      dup.title = 'Duplicar esta despesa neste mês (ex.: pagar duas vezes no mesmo mês)';
+      dup.onclick = ()=> duplicateExpense(e.id);
+      top.appendChild(orderInput); top.appendChild(nameInput); top.appendChild(valInput); top.appendChild(dup); top.appendChild(rm);
       row.appendChild(top);
 
       const meta = el('div','expense-meta');
