@@ -165,6 +165,10 @@
   .conta-group-row td{ padding:0; border-bottom:none; }
   .conta-header{ display:flex; align-items:center; gap:8px; background:var(--teal-soft); padding:7px 8px; margin-top:8px; border-radius:6px 6px 0 0; }
   .conta-header-casa{ background:var(--amber-soft); }
+  .cat-head{ display:flex; align-items:center; gap:8px; background:var(--teal-soft); padding:7px 8px; margin-top:12px; border-radius:6px; }
+  .cat-toggle{ border:none; background:transparent; color:var(--teal); font-size:13px; padding:0 4px; cursor:pointer; }
+  .cat-add{ border:none; background:transparent; color:var(--teal); font-size:16px; font-weight:700; padding:0 6px; cursor:pointer; }
+  .cat-select{ width:auto; max-width:120px; font-size:11px; padding:3px 4px; color:var(--ink-soft); }
   .conta-type-btn{ border:none; background:transparent; padding:0 2px; font-size:14px; line-height:1; }
   .conta-header-input{ font-family:'Source Serif 4',serif; font-weight:600; font-size:13.5px; background:transparent; border:none; color:var(--teal); padding:2px 4px; flex:1; min-width:0; }
   .conta-header-casa .conta-header-input{ color:var(--amber); }
@@ -221,7 +225,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
 
 (function(){
   const root = document.getElementById('root');
-  const DEFAULT_TEXTS = ['Nova despesa', 'Nova caixinha', 'Nova poupança', 'Nova pessoa'];
+  const DEFAULT_TEXTS = ['Nova despesa', 'Nova caixinha', 'Nova poupança', 'Nova pessoa', 'Nova categoria'];
   document.addEventListener('focusin', function(ev){
     const t = ev.target;
     if(t && t.tagName==='INPUT' && t.type==='number'){
@@ -288,6 +292,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
         id: uid(), name, value, auto: false, skip: false,
         defaultPayerId: marcelo, order: idx+1
       })),
+      grupos: [], // categorias de despesas: {id,name,collapsed}
       monthlyExpenses: {}, // month -> [ {id,name,value,auto,autoDay,order,defaultPayerId,skip} ]
       monthlyExpenseStatus: {}, // month -> { expenseId: {paid, payerId} }
       contas: [
@@ -325,6 +330,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     if(state.caixinhas && state.caixinhas.some(c=> c.defaultPayerId===undefined)){
       state.caixinhas.forEach(c=>{ if(c.defaultPayerId===undefined) c.defaultPayerId = state.people[0]?.id || null; });
     }
+    if(!state.grupos) state.grupos = [];
     if(!state.monthlyExpenses){
       // Primeira vez com independência por mês: a lista global antiga vira
       // a cópia do mês atual, e segue daqui pra frente como independente.
@@ -680,11 +686,24 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     list.splice(insertAt, 0, item);
     list.forEach((x, idx)=>{ x.order = idx+1; });
   }
-  function addExpense(){
+  function addGrupo(){
+    update(s=>{ s.grupos.push({ id: uid(), name:'Nova categoria', collapsed:false }); });
+  }
+  function removeGrupo(id){
+    update(s=>{
+      s.grupos = s.grupos.filter(g=>g.id!==id);
+      Object.values(s.monthlyExpenses||{}).forEach(list=> list.forEach(e=>{ if(e.groupId===id) e.groupId=null; }));
+    });
+  }
+  function toggleGrupo(id){
+    update(s=>{ const g=s.grupos.find(x=>x.id===id); g.collapsed=!g.collapsed; });
+  }
+  function addExpense(groupId){
     update(s=>{
       const list = getMonthExpenses(s.currentMonth);
       list.push({
         id: uid(), name:'Nova despesa', value:0, auto:false, skip:false,
+        groupId: (typeof groupId==='string') ? groupId : null,
         defaultPayerId: s.people[0]?.id || null,
         order: (Math.max(0, ...list.map(e=>e.order||0)) + 1)
       });
@@ -925,7 +944,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       expPanel.appendChild(el('div','empty','Nenhuma despesa ainda. Adicione a primeira abaixo.'));
     }
     const sortedExpenses = monthExpenses.slice().sort((a,b)=> (a.order||9999) - (b.order||9999));
-    sortedExpenses.forEach(e=>{
+    function buildExpenseRow(e){
       const st = getExpenseStatus(e.id);
       const row = el('div','expense-row'+(e.skip?' skipped':''));
       const top = el('div','row');
@@ -990,6 +1009,19 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       defWrap.appendChild(document.createTextNode('📌'));
       meta.appendChild(defWrap);
 
+      if(state.grupos.length>0){
+        const catSel = el('select','cat-select');
+        const o0 = el('option'); o0.value=''; o0.textContent='categoria…'; catSel.appendChild(o0);
+        state.grupos.forEach(g=>{
+          const o = el('option'); o.value=g.id; o.textContent=g.name;
+          if(e.groupId===g.id) o.selected = true;
+          catSel.appendChild(o);
+        });
+        catSel.title = 'Categoria desta despesa';
+        catSel.onchange = ev=> update(s=>{ getMonthExpenses(s.currentMonth).find(x=>x.id===e.id).groupId = ev.target.value || null; });
+        meta.appendChild(catSel);
+      }
+
       const skipBtn = el('button','pill '+(e.skip?'pill-skip':'pill-skip-off'), e.skip ? '↩ considerar' : 'ignorar mês');
       skipBtn.title = e.skip ? 'Voltar a considerar esta despesa neste mês' : 'Ignorar esta despesa só neste mês, sem apagar (não afeta outros meses)';
       skipBtn.onclick = ()=> toggleSkip(e.id);
@@ -1007,11 +1039,58 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       }
 
       row.appendChild(meta);
-      expPanel.appendChild(row);
-    });
+      return row;
+    }
+    function groupPending(list){
+      return list.reduce((s,e)=>{
+        if(e.skip) return s;
+        const paid = isExpensePaid(e, getExpenseStatus(e.id), state.currentMonth);
+        return s + (paid ? 0 : (Number(e.value)||0));
+      }, 0);
+    }
+    if(state.grupos.length===0){
+      sortedExpenses.forEach(e=> expPanel.appendChild(buildExpenseRow(e)));
+    } else {
+      const known = new Set(state.grupos.map(g=>g.id));
+      state.grupos.forEach(g=>{
+        const items = sortedExpenses.filter(e=> e.groupId===g.id);
+        const head = el('div','cat-head');
+        const tg = el('button','cat-toggle', g.collapsed ? '▸' : '▾');
+        tg.title = g.collapsed ? 'Expandir' : 'Recolher';
+        tg.onclick = ()=> toggleGrupo(g.id);
+        const nm = el('input','conta-header-input');
+        nm.value = g.name;
+        nm.oninput = ev=> updateSilent(s=>{ s.grupos.find(x=>x.id===g.id).name = ev.target.value; });
+        const tot = el('span','conta-header-total', fmt(groupPending(items)) + (g.collapsed ? ` · ${items.length}` : ''));
+        tot.title = 'Pendente nesta categoria';
+        const ad = el('button','cat-add','+');
+        ad.title = 'Adicionar despesa nesta categoria';
+        ad.onclick = ()=> addExpense(g.id);
+        const rmg = el('button','btn-danger-text','✕');
+        rmg.title = 'Apagar categoria (as despesas ficam em "Sem categoria")';
+        rmg.onclick = ()=>{ if(confirm('Apagar a categoria "'+g.name+'"? As despesas não são apagadas.')) removeGrupo(g.id); };
+        head.appendChild(tg); head.appendChild(nm); head.appendChild(tot); head.appendChild(ad); head.appendChild(rmg);
+        expPanel.appendChild(head);
+        if(!g.collapsed) items.forEach(e=> expPanel.appendChild(buildExpenseRow(e)));
+      });
+      const loose = sortedExpenses.filter(e=> !e.groupId || !known.has(e.groupId));
+      if(loose.length>0){
+        const head = el('div','cat-head');
+        head.style.background='var(--amber-soft)';
+        const nm = el('span','conta-header-static','Sem categoria');
+        const tot = el('span','conta-header-total', fmt(groupPending(loose)));
+        tot.style.color='var(--amber)';
+        head.appendChild(nm); head.appendChild(tot);
+        expPanel.appendChild(head);
+        loose.forEach(e=> expPanel.appendChild(buildExpenseRow(e)));
+      }
+    }
     const addE = el('button','btn-ghost','+ adicionar despesa');
-    addE.onclick = addExpense;
+    addE.onclick = ()=> addExpense();
     expPanel.appendChild(addE);
+    const addG = el('button','btn-ghost','+ nova categoria');
+    addG.onclick = addGrupo;
+    expPanel.appendChild(addG);
     wrap.appendChild(expPanel);
 
     // Caixinhas agrupadas por conta poupança
