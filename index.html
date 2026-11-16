@@ -1041,12 +1041,19 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       row.appendChild(meta);
       return row;
     }
-    function groupPending(list){
-      return list.reduce((s,e)=>{
-        if(e.skip) return s;
-        const paid = isExpensePaid(e, getExpenseStatus(e.id), state.currentMonth);
-        return s + (paid ? 0 : (Number(e.value)||0));
-      }, 0);
+    function groupSums(list){
+      let total = 0, pending = 0;
+      list.forEach(e=>{
+        if(e.skip) return;
+        const v = Number(e.value)||0;
+        total += v;
+        if(!isExpensePaid(e, getExpenseStatus(e.id), state.currentMonth)) pending += v;
+      });
+      return { total, pending };
+    }
+    function groupLabel(list){
+      const g = groupSums(list);
+      return `${fmt(g.pending)} / ${fmt(g.total)}`;
     }
     if(state.grupos.length===0){
       sortedExpenses.forEach(e=> expPanel.appendChild(buildExpenseRow(e)));
@@ -1061,8 +1068,9 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
         const nm = el('input','conta-header-input');
         nm.value = g.name;
         nm.oninput = ev=> updateSilent(s=>{ s.grupos.find(x=>x.id===g.id).name = ev.target.value; });
-        const tot = el('span','conta-header-total', fmt(groupPending(items)) + (g.collapsed ? ` · ${items.length}` : ''));
-        tot.title = 'Pendente nesta categoria';
+        const tot = el('span','conta-header-total', groupLabel(items) + (g.collapsed ? ` · ${items.length}` : ''));
+        tot.title = 'Falta pagar / total da categoria neste mês (itens ignorados não contam)';
+        tot.style.whiteSpace = 'nowrap';
         const ad = el('button','cat-add','+');
         ad.title = 'Adicionar despesa nesta categoria';
         ad.onclick = ()=> addExpense(g.id);
@@ -1078,8 +1086,9 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
         const head = el('div','cat-head');
         head.style.background='var(--amber-soft)';
         const nm = el('span','conta-header-static','Sem categoria');
-        const tot = el('span','conta-header-total', fmt(groupPending(loose)));
-        tot.style.color='var(--amber)';
+        const tot = el('span','conta-header-total', groupLabel(loose));
+        tot.title = 'Falta pagar / total das despesas sem categoria neste mês';
+        tot.style.color='var(--amber)'; tot.style.whiteSpace='nowrap';
         head.appendChild(nm); head.appendChild(tot);
         expPanel.appendChild(head);
         loose.forEach(e=> expPanel.appendChild(buildExpenseRow(e)));
