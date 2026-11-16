@@ -371,9 +371,21 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     });
   }
 
+  // Configuração pública do projeto Firebase (não é segredo; a segurança vem das regras do Firestore).
+  const DEFAULT_FB_CONFIG = {
+    apiKey: "AIzaSyC1MsIodfepCHpww7j6dXBXiwFRvP_Ax_I",
+    authDomain: "controle-de-gastos-cd8f1.firebaseapp.com",
+    projectId: "controle-de-gastos-cd8f1",
+    storageBucket: "controle-de-gastos-cd8f1.firebasestorage.app",
+    messagingSenderId: "726582247534",
+    appId: "1:726582247534:web:1a73f2dd57846ceaf8e67f"
+  };
+  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+
   function showSetupScreen(prefillError){
     let savedCfg = '';
     try{ savedCfg = localStorage.getItem('gastos_fb_config') || ''; }catch(e){}
+    if(!savedCfg) savedCfg = JSON.stringify(DEFAULT_FB_CONFIG, null, 2);
     let savedHousehold = '';
     try{ savedHousehold = localStorage.getItem('gastos_household_id') || ''; }catch(e){}
     root.innerHTML = `
@@ -381,7 +393,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
         <h1>Controle de gastos</h1>
         <p class="setup-lead">Configure a sincronização uma vez em cada aparelho. Os dados ficam salvos no seu projeto Firebase e sincronizam entre todos os dispositivos que usarem o mesmo código.</p>
         ${prefillError ? `<div class="setup-error">${prefillError}</div>` : ''}
-        <label class="setup-label">Configuração do Firebase (cole o objeto firebaseConfig)</label>
+        <label class="setup-label">Configuração do Firebase (já preenchida — normalmente não precisa mexer)</label>
         <textarea id="setupCfg" class="setup-textarea" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...", ...}'>${savedCfg}</textarea>
         <label class="setup-label">Código da casa (combine o mesmo código nos dois aparelhos)</label>
         <input id="setupHousehold" class="setup-input" type="text" placeholder="ex: marcelo-gabriela-2026" value="${savedHousehold}">
@@ -437,8 +449,8 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       });
     }catch(err){
       console.error(err);
-      try{ localStorage.removeItem('gastos_fb_config'); }catch(e){}
-      showSetupScreen('Não consegui conectar com essas configurações (' + (err.message||err) + '). Confira o objeto do Firebase e tente de novo.');
+      // Não apaga mais a config salva: uma queda de internet não deve te jogar de volta pra tela de setup.
+      showSetupScreen('Não consegui conectar agora (' + (err.message||err) + '). Verifique a internet e clique em Salvar e conectar para tentar de novo.');
     }
   }
 
@@ -448,7 +460,8 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       cfg = JSON.parse(localStorage.getItem('gastos_fb_config') || 'null');
       household = localStorage.getItem('gastos_household_id');
     }catch(e){}
-    if(!cfg || !household){
+    if(!cfg) cfg = DEFAULT_FB_CONFIG;
+    if(!household){
       showSetupScreen();
       return;
     }
